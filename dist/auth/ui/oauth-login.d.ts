@@ -41,8 +41,8 @@ export declare class OAuthLoginComponent {
     private config;
     private state;
     private container;
-    private onAuthSuccess?;
-    private onAuthError?;
+    private authSuccessHandler?;
+    private authErrorHandler?;
     constructor(container: HTMLElement, config: OAuthLoginConfig);
     /**
      * Initialize the component
@@ -97,10 +97,6 @@ export declare class OAuthLoginComponent {
      */
     private applyCustomStyles;
     /**
-     * Set authentication success callback
-     */
-    onAuthSuccess(callback: (user: any) => void): void;
-    /**
      * Set authentication error callback
      */
     onAuthError(callback: (error: string) => void): void;
@@ -125,4 +121,12 @@ export declare function handleOAuthCallback(): Promise<{
     user?: any;
     error?: string;
 }>;
+declare global {
+    interface Window {
+        prometheanOAuthHandlers?: {
+            onSuccess?: (user: any) => void;
+            onError?: (error: string) => void;
+        };
+    }
+}
 //# sourceMappingURL=oauth-login.d.ts.map

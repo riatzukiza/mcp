@@ -78,40 +78,39 @@ export function getAuthConfig() {
         requestsPerMinute: parseInt(process.env.MCP_RATE_LIMIT_RPM || '100', 10),
         dangerousRequestsPerHour: parseInt(process.env.MCP_RATE_LIMIT_DANGEROUS_PH || '10', 10),
     };
-    config.adminIpWhitelist = process.env.MCP_ADMIN_IP_WHITELIST?.split(',');
+    config.adminIpWhitelist = process.env.MCP_ADMIN_IP_WHITELIST
+        ? process.env.MCP_ADMIN_IP_WHITELIST.split(',').filter((ip) => ip.trim().length > 0)
+        : config.adminIpWhitelist;
     // OAuth config
     if (config.oauth) {
-        config.oauth.enabled = process.env.MCP_OAUTH_ENABLED === 'true';
-        config.oauth.redirectUri = process.env.MCP_OAUTH_REDIRECT_URI || config.oauth.redirectUri;
-        config.oauth.autoCreateUsers = process.env.MCP_OAUTH_AUTO_CREATE_USERS !== 'false';
-        config.oauth.defaultRole =
-            process.env.MCP_OAUTH_DEFAULT_ROLE || config.oauth.defaultRole;
-        config.oauth.enableUserSync = process.env.MCP_OAUTH_ENABLE_USER_SYNC !== 'false';
-        config.oauth.syncInterval = parseInt(process.env.MCP_OAUTH_SYNC_INTERVAL || '3600', 10);
+        config.oauth.enabled = process.env.OAUTH_ENABLED === 'true';
+        config.oauth.redirectUri = process.env.OAUTH_REDIRECT_URI || config.oauth.redirectUri;
+        config.oauth.autoCreateUsers = process.env.OAUTH_AUTO_CREATE_USERS !== 'false';
+        config.oauth.defaultRole = process.env.OAUTH_DEFAULT_ROLE || config.oauth.defaultRole;
+        config.oauth.enableUserSync = process.env.OAUTH_ENABLE_USER_SYNC !== 'false';
+        config.oauth.syncInterval = parseInt(process.env.OAUTH_SYNC_INTERVAL || '3600', 10);
         // GitHub OAuth
         if (config.oauth.providers.github) {
-            config.oauth.providers.github.enabled = process.env.MCP_OAUTH_GITHUB_ENABLED === 'true';
-            config.oauth.providers.github.clientId = process.env.MCP_OAUTH_GITHUB_CLIENT_ID || '';
-            config.oauth.providers.github.clientSecret = process.env.MCP_OAUTH_GITHUB_CLIENT_SECRET || '';
-            config.oauth.providers.github.allowSignup =
-                process.env.MCP_OAUTH_GITHUB_ALLOW_SIGNUP !== 'false';
+            config.oauth.providers.github.enabled = process.env.OAUTH_GITHUB_ENABLED === 'true';
+            config.oauth.providers.github.clientId = process.env.OAUTH_GITHUB_CLIENT_ID || '';
+            config.oauth.providers.github.clientSecret = process.env.OAUTH_GITHUB_CLIENT_SECRET || '';
+            config.oauth.providers.github.allowSignup = process.env.OAUTH_GITHUB_ALLOW_SIGNUP !== 'false';
         }
         // Google OAuth
         if (config.oauth.providers.google) {
-            config.oauth.providers.google.enabled = process.env.MCP_OAUTH_GOOGLE_ENABLED === 'true';
-            config.oauth.providers.google.clientId = process.env.MCP_OAUTH_GOOGLE_CLIENT_ID || '';
-            config.oauth.providers.google.clientSecret = process.env.MCP_OAUTH_GOOGLE_CLIENT_SECRET || '';
-            config.oauth.providers.google.hostedDomain = process.env.MCP_OAUTH_GOOGLE_HOSTED_DOMAIN;
-            config.oauth.providers.google.prompt =
-                process.env.MCP_OAUTH_GOOGLE_PROMPT || 'consent';
+            config.oauth.providers.google.enabled = process.env.OAUTH_GOOGLE_ENABLED === 'true';
+            config.oauth.providers.google.clientId = process.env.OAUTH_GOOGLE_CLIENT_ID || '';
+            config.oauth.providers.google.clientSecret = process.env.OAUTH_GOOGLE_CLIENT_SECRET || '';
+            config.oauth.providers.google.hostedDomain = process.env.OAUTH_GOOGLE_HOSTED_DOMAIN;
+            config.oauth.providers.google.prompt = process.env.OAUTH_GOOGLE_PROMPT || 'consent';
         }
         // JWT config
-        config.oauth.jwt.secret = process.env.MCP_OAUTH_JWT_SECRET || config.oauth.jwt.secret;
-        config.oauth.jwt.issuer = process.env.MCP_OAUTH_JWT_ISSUER || config.oauth.jwt.issuer;
-        config.oauth.jwt.audience = process.env.MCP_OAUTH_JWT_AUDIENCE || config.oauth.jwt.audience;
-        config.oauth.jwt.accessTokenExpiry = parseInt(process.env.MCP_OAUTH_JWT_ACCESS_EXPIRY || '3600', 10);
-        config.oauth.jwt.refreshTokenExpiry = parseInt(process.env.MCP_OAUTH_JWT_REFRESH_EXPIRY || '2592000', 10);
-        config.oauth.jwt.algorithm = process.env.MCP_OAUTH_JWT_ALGORITHM || 'HS256';
+        config.oauth.jwt.secret = process.env.OAUTH_JWT_SECRET || config.oauth.jwt.secret;
+        config.oauth.jwt.issuer = process.env.OAUTH_JWT_ISSUER || config.oauth.jwt.issuer;
+        config.oauth.jwt.audience = process.env.OAUTH_JWT_AUDIENCE || config.oauth.jwt.audience;
+        config.oauth.jwt.accessTokenExpiry = parseInt(process.env.OAUTH_JWT_ACCESS_EXPIRY || '3600', 10);
+        config.oauth.jwt.refreshTokenExpiry = parseInt(process.env.OAUTH_JWT_REFRESH_EXPIRY || '2592000', 10);
+        config.oauth.jwt.algorithm = process.env.OAUTH_JWT_ALGORITHM || 'HS256';
     }
     // User registry config
     if (config.userRegistry) {

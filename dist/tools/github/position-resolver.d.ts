@@ -42,14 +42,14 @@ export declare const ResolvePositionResultSchema: z.ZodObject<{
         startLine: z.ZodOptional<z.ZodNumber>;
         startSide: z.ZodOptional<z.ZodLiteral<"RIGHT">>;
     }, "strip", z.ZodTypeAny, {
-        path: string;
         line: number;
+        path: string;
         side: "RIGHT";
         startLine?: number | undefined;
         startSide?: "RIGHT" | undefined;
     }, {
-        path: string;
         line: number;
+        path: string;
         side: "RIGHT";
         startLine?: number | undefined;
         startSide?: "RIGHT" | undefined;
@@ -71,8 +71,8 @@ export declare const ResolvePositionResultSchema: z.ZodObject<{
         position: number;
     } | undefined;
     graphql?: {
-        path: string;
         line: number;
+        path: string;
         side: "RIGHT";
         startLine?: number | undefined;
         startSide?: "RIGHT" | undefined;
@@ -84,8 +84,8 @@ export declare const ResolvePositionResultSchema: z.ZodObject<{
         position: number;
     } | undefined;
     graphql?: {
-        path: string;
         line: number;
+        path: string;
         side: "RIGHT";
         startLine?: number | undefined;
         startSide?: "RIGHT" | undefined;
@@ -97,12 +97,12 @@ export declare const ResolvePositionErrorSchema: z.ZodObject<{
     hint: z.ZodOptional<z.ZodString>;
     nearest: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
 }, "strip", z.ZodTypeAny, {
-    reason: "LINE_OUTDATED_OR_NOT_IN_DIFF" | "RANGE_START_NOT_IN_DIFF" | "INVALID_RANGE" | "PATCH_NOT_FOUND_OR_BINARY";
+    reason: "PATCH_NOT_FOUND_OR_BINARY" | "LINE_OUTDATED_OR_NOT_IN_DIFF" | "RANGE_START_NOT_IN_DIFF" | "INVALID_RANGE";
     ok: false;
     hint?: string | undefined;
     nearest?: number[] | undefined;
 }, {
-    reason: "LINE_OUTDATED_OR_NOT_IN_DIFF" | "RANGE_START_NOT_IN_DIFF" | "INVALID_RANGE" | "PATCH_NOT_FOUND_OR_BINARY";
+    reason: "PATCH_NOT_FOUND_OR_BINARY" | "LINE_OUTDATED_OR_NOT_IN_DIFF" | "RANGE_START_NOT_IN_DIFF" | "INVALID_RANGE";
     ok: false;
     hint?: string | undefined;
     nearest?: number[] | undefined;

@@ -45,8 +45,8 @@ declare const Config: z.ZodObject<{
             prerequisites?: string[] | undefined;
         }>>>>;
     }, "strip", z.ZodTypeAny, {
-        description?: string | undefined;
         title?: string | undefined;
+        description?: string | undefined;
         workflow?: string[] | undefined;
         expectations?: {
             usage?: string[] | undefined;
@@ -54,8 +54,8 @@ declare const Config: z.ZodObject<{
             prerequisites?: string[] | undefined;
         } | undefined;
     }, {
-        description?: string | undefined;
         title?: string | undefined;
+        description?: string | undefined;
         workflow?: string[] | undefined;
         expectations?: {
             usage?: string[] | undefined;
@@ -84,8 +84,8 @@ declare const Config: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             }>>>>;
         }, "strip", z.ZodTypeAny, {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -93,8 +93,8 @@ declare const Config: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             } | undefined;
         }, {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -104,10 +104,9 @@ declare const Config: z.ZodObject<{
         }>>;
     }, "strip", z.ZodTypeAny, {
         tools: string[];
-        includeHelp?: boolean | undefined;
         meta?: {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -115,19 +114,20 @@ declare const Config: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             } | undefined;
         } | undefined;
+        includeHelp?: boolean | undefined;
     }, {
+        meta?: {
+            title?: string | undefined;
+            description?: string | undefined;
+            workflow?: string[] | undefined;
+            expectations?: {
+                usage?: string[] | undefined;
+                pitfalls?: string[] | undefined;
+                prerequisites?: string[] | undefined;
+            } | undefined;
+        } | undefined;
         tools?: string[] | undefined;
         includeHelp?: boolean | undefined;
-        meta?: {
-            description?: string | undefined;
-            title?: string | undefined;
-            workflow?: string[] | undefined;
-            expectations?: {
-                usage?: string[] | undefined;
-                pitfalls?: string[] | undefined;
-                prerequisites?: string[] | undefined;
-            } | undefined;
-        } | undefined;
     }>>>;
     stdioProxyConfig: z.ZodDefault<z.ZodNullable<z.ZodString>>;
     stdioProxies: z.ZodDefault<z.ZodArray<z.ZodObject<{
@@ -155,14 +155,13 @@ declare const Config: z.ZodObject<{
     version: z.ZodOptional<z.ZodString>;
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, "strip", z.ZodTypeAny, {
-    tools: string[];
     transport: "stdio" | "http";
+    tools: string[];
     endpoints: Record<string, {
         tools: string[];
-        includeHelp?: boolean | undefined;
         meta?: {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -170,6 +169,7 @@ declare const Config: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             } | undefined;
         } | undefined;
+        includeHelp?: boolean | undefined;
     }>;
     stdioProxyConfig: string | null;
     stdioProxies: {
@@ -180,10 +180,11 @@ declare const Config: z.ZodObject<{
         httpPath: string;
         cwd?: string | undefined;
     }[];
+    metadata?: Record<string, unknown> | undefined;
     includeHelp?: boolean | undefined;
     stdioMeta?: {
-        description?: string | undefined;
         title?: string | undefined;
+        description?: string | undefined;
         workflow?: string[] | undefined;
         expectations?: {
             usage?: string[] | undefined;
@@ -192,14 +193,14 @@ declare const Config: z.ZodObject<{
         } | undefined;
     } | undefined;
     version?: string | undefined;
-    metadata?: Record<string, unknown> | undefined;
 }, {
+    metadata?: Record<string, unknown> | undefined;
+    transport?: "stdio" | "http" | undefined;
     tools?: string[] | undefined;
     includeHelp?: boolean | undefined;
-    transport?: "stdio" | "http" | undefined;
     stdioMeta?: {
-        description?: string | undefined;
         title?: string | undefined;
+        description?: string | undefined;
         workflow?: string[] | undefined;
         expectations?: {
             usage?: string[] | undefined;
@@ -208,11 +209,9 @@ declare const Config: z.ZodObject<{
         } | undefined;
     } | undefined;
     endpoints?: Record<string, {
-        tools?: string[] | undefined;
-        includeHelp?: boolean | undefined;
         meta?: {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -220,6 +219,8 @@ declare const Config: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             } | undefined;
         } | undefined;
+        tools?: string[] | undefined;
+        includeHelp?: boolean | undefined;
     }> | undefined;
     stdioProxyConfig?: string | null | undefined;
     stdioProxies?: {
@@ -231,7 +232,6 @@ declare const Config: z.ZodObject<{
         env?: Record<string, string> | undefined;
     }[] | undefined;
     version?: string | undefined;
-    metadata?: Record<string, unknown> | undefined;
 }>;
 export declare const ConfigSchema: z.ZodObject<{
     transport: z.ZodDefault<z.ZodEnum<["stdio", "http"]>>;
@@ -255,8 +255,8 @@ export declare const ConfigSchema: z.ZodObject<{
             prerequisites?: string[] | undefined;
         }>>>>;
     }, "strip", z.ZodTypeAny, {
-        description?: string | undefined;
         title?: string | undefined;
+        description?: string | undefined;
         workflow?: string[] | undefined;
         expectations?: {
             usage?: string[] | undefined;
@@ -264,8 +264,8 @@ export declare const ConfigSchema: z.ZodObject<{
             prerequisites?: string[] | undefined;
         } | undefined;
     }, {
-        description?: string | undefined;
         title?: string | undefined;
+        description?: string | undefined;
         workflow?: string[] | undefined;
         expectations?: {
             usage?: string[] | undefined;
@@ -294,8 +294,8 @@ export declare const ConfigSchema: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             }>>>>;
         }, "strip", z.ZodTypeAny, {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -303,8 +303,8 @@ export declare const ConfigSchema: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             } | undefined;
         }, {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -314,10 +314,9 @@ export declare const ConfigSchema: z.ZodObject<{
         }>>;
     }, "strip", z.ZodTypeAny, {
         tools: string[];
-        includeHelp?: boolean | undefined;
         meta?: {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -325,19 +324,20 @@ export declare const ConfigSchema: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             } | undefined;
         } | undefined;
+        includeHelp?: boolean | undefined;
     }, {
+        meta?: {
+            title?: string | undefined;
+            description?: string | undefined;
+            workflow?: string[] | undefined;
+            expectations?: {
+                usage?: string[] | undefined;
+                pitfalls?: string[] | undefined;
+                prerequisites?: string[] | undefined;
+            } | undefined;
+        } | undefined;
         tools?: string[] | undefined;
         includeHelp?: boolean | undefined;
-        meta?: {
-            description?: string | undefined;
-            title?: string | undefined;
-            workflow?: string[] | undefined;
-            expectations?: {
-                usage?: string[] | undefined;
-                pitfalls?: string[] | undefined;
-                prerequisites?: string[] | undefined;
-            } | undefined;
-        } | undefined;
     }>>>;
     stdioProxyConfig: z.ZodDefault<z.ZodNullable<z.ZodString>>;
     stdioProxies: z.ZodDefault<z.ZodArray<z.ZodObject<{
@@ -365,14 +365,13 @@ export declare const ConfigSchema: z.ZodObject<{
     version: z.ZodOptional<z.ZodString>;
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, "strip", z.ZodTypeAny, {
-    tools: string[];
     transport: "stdio" | "http";
+    tools: string[];
     endpoints: Record<string, {
         tools: string[];
-        includeHelp?: boolean | undefined;
         meta?: {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -380,6 +379,7 @@ export declare const ConfigSchema: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             } | undefined;
         } | undefined;
+        includeHelp?: boolean | undefined;
     }>;
     stdioProxyConfig: string | null;
     stdioProxies: {
@@ -390,10 +390,11 @@ export declare const ConfigSchema: z.ZodObject<{
         httpPath: string;
         cwd?: string | undefined;
     }[];
+    metadata?: Record<string, unknown> | undefined;
     includeHelp?: boolean | undefined;
     stdioMeta?: {
-        description?: string | undefined;
         title?: string | undefined;
+        description?: string | undefined;
         workflow?: string[] | undefined;
         expectations?: {
             usage?: string[] | undefined;
@@ -402,14 +403,14 @@ export declare const ConfigSchema: z.ZodObject<{
         } | undefined;
     } | undefined;
     version?: string | undefined;
-    metadata?: Record<string, unknown> | undefined;
 }, {
+    metadata?: Record<string, unknown> | undefined;
+    transport?: "stdio" | "http" | undefined;
     tools?: string[] | undefined;
     includeHelp?: boolean | undefined;
-    transport?: "stdio" | "http" | undefined;
     stdioMeta?: {
-        description?: string | undefined;
         title?: string | undefined;
+        description?: string | undefined;
         workflow?: string[] | undefined;
         expectations?: {
             usage?: string[] | undefined;
@@ -418,11 +419,9 @@ export declare const ConfigSchema: z.ZodObject<{
         } | undefined;
     } | undefined;
     endpoints?: Record<string, {
-        tools?: string[] | undefined;
-        includeHelp?: boolean | undefined;
         meta?: {
-            description?: string | undefined;
             title?: string | undefined;
+            description?: string | undefined;
             workflow?: string[] | undefined;
             expectations?: {
                 usage?: string[] | undefined;
@@ -430,6 +429,8 @@ export declare const ConfigSchema: z.ZodObject<{
                 prerequisites?: string[] | undefined;
             } | undefined;
         } | undefined;
+        tools?: string[] | undefined;
+        includeHelp?: boolean | undefined;
     }> | undefined;
     stdioProxyConfig?: string | null | undefined;
     stdioProxies?: {
@@ -441,7 +442,6 @@ export declare const ConfigSchema: z.ZodObject<{
         env?: Record<string, string> | undefined;
     }[] | undefined;
     version?: string | undefined;
-    metadata?: Record<string, unknown> | undefined;
 }>;
 export type AppConfig = z.infer<typeof Config>;
 export type InlineProxyConfig = z.infer<typeof InlineProxy>;

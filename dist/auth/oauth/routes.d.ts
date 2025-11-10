@@ -5,6 +5,7 @@
  * following security best practices and the project's functional programming style.
  */
 import type { FastifyInstance } from 'fastify';
+import '@fastify/cookie';
 import { OAuthSystem } from './index.js';
 import { OAuthIntegration } from '../integration.js';
 import { JwtTokenManager } from './jwt.js';

@@ -5,18 +5,13 @@
  * following security best practices and the project's functional programming style.
  */
 
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import '@fastify/cookie';
 import { OAuthSystem } from './index.js';
 import { OAuthIntegration } from '../integration.js';
 import { JwtTokenManager } from './jwt.js';
 import { UserRegistry } from '../users/registry.js';
 import { AuthenticationManager } from '../../core/authentication.js';
-import type {
-  OAuthSystemConfig,
-  JwtTokenConfig,
-  UserRegistryConfig,
-  OAuthIntegrationConfig,
-} from '../types.js';
 
 /**
  * OAuth route configuration
@@ -41,6 +36,7 @@ interface OAuthCallbackRequest {
   state?: string;
   error?: string;
   error_description?: string;
+  redirect_uri?: string;
 }
 
 /**
@@ -70,63 +66,60 @@ interface OAuthLogoutRequest {
  * Register OAuth routes
  */
 export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRouteConfig): void {
-  const { basePath, oauthSystem, oauthIntegration, jwtManager, userRegistry, authManager } = config;
+  const { basePath, oauthSystem, oauthIntegration, userRegistry } = config;
+
+  type CookieOptions = {
+    readonly path: string;
+    readonly httpOnly: boolean;
+    readonly secure: boolean;
+    readonly sameSite: 'strict' | 'lax' | 'none';
+    readonly domain?: string;
+  };
+
+  const cookieDefaults: CookieOptions = {
+    path: '/',
+    httpOnly: true,
+    secure: config.secureCookies,
+    sameSite: config.sameSitePolicy,
+    domain: config.cookieDomain,
+  };
 
   // Helper to set secure cookies
   const setAuthCookie = (
     reply: FastifyReply,
     accessToken: string,
     refreshToken: string,
-    sessionId: string,
+    sessionId?: string,
   ): void => {
-    const cookieOptions = {
-      path: '/',
-      httpOnly: true,
-      secure: config.secureCookies,
-      sameSite: config.sameSitePolicy as const,
-      domain: config.cookieDomain,
-    };
-
     // Access token cookie (shorter lived)
     reply.setCookie('access_token', accessToken, {
-      ...cookieOptions,
+      ...cookieDefaults,
       maxAge: 15 * 60, // 15 minutes
     });
 
     // Refresh token cookie (longer lived)
     reply.setCookie('refresh_token', refreshToken, {
-      ...cookieOptions,
+      ...cookieDefaults,
       maxAge: 7 * 24 * 60 * 60, // 7 days
     });
 
-    // Session ID cookie
-    reply.setCookie('session_id', sessionId, {
-      ...cookieOptions,
-      maxAge: 24 * 60 * 60, // 24 hours
-    });
+    if (sessionId) {
+      reply.setCookie('session_id', sessionId, {
+        ...cookieDefaults,
+        maxAge: 24 * 60 * 60, // 24 hours
+      });
+      return;
+    }
+
+    reply.clearCookie('session_id', cookieDefaults);
   };
 
   // Helper to clear auth cookies
   const clearAuthCookie = (reply: FastifyReply): void => {
-    const cookieOptions = {
-      path: '/',
-      httpOnly: true,
-      secure: config.secureCookies,
-      sameSite: config.sameSitePolicy as const,
-      domain: config.cookieDomain,
-    };
-
-    reply.clearCookie('access_token', cookieOptions);
-    reply.clearCookie('refresh_token', cookieOptions);
-    reply.clearCookie('session_id', cookieOptions);
+    reply.clearCookie('access_token', cookieDefaults);
+    reply.clearCookie('refresh_token', cookieDefaults);
+    reply.clearCookie('session_id', cookieDefaults);
   };
-
-  // Helper to get client info from request
-  const getClientInfo = (request: FastifyRequest) => ({
-    ipAddress: request.ip,
-    userAgent: request.headers['user-agent'],
-    referer: request.headers.referer,
-  });
 
   // Helper to create error response
   const createErrorResponse = (
@@ -154,7 +147,7 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
   };
 
   // Get available OAuth providers
-  fastify.get(`${basePath}/providers`, async (request, reply) => {
+  fastify.get(`${basePath}/providers`, async (_request, reply) => {
     try {
       const providers = oauthSystem.getAvailableProviders();
       createSuccessResponse(reply, { providers });
@@ -191,7 +184,7 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
         path: `${basePath}`,
         httpOnly: true,
         secure: config.secureCookies,
-        sameSite: config.sameSitePolicy as const,
+        sameSite: config.sameSitePolicy,
         maxAge: 10 * 60, // 10 minutes
         domain: config.cookieDomain,
       });
@@ -215,7 +208,6 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
     async (request, reply) => {
       try {
         const { code, state, error, error_description } = request.query;
-        const clientInfo = getClientInfo(request);
 
         // Validate state from cookie
         const cookieState = request.cookies.oauth_state;
@@ -276,7 +268,7 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
           reply,
           result.tokens.accessToken,
           result.tokens.refreshToken,
-          result.tokens.sessionId || '',
+          result.session?.sessionId,
         );
 
         // Log successful authentication
@@ -289,7 +281,7 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
         if (acceptHeader?.includes('text/html')) {
           // Redirect for browser requests
           const redirectUrl = (request.query.redirect_uri as string) || '/';
-          reply.redirect(302, redirectUrl);
+          reply.redirect(redirectUrl, 302);
         } else {
           // JSON response for API requests
           createSuccessResponse(reply, {
@@ -353,7 +345,7 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
         path: '/',
         httpOnly: true,
         secure: config.secureCookies,
-        sameSite: config.sameSitePolicy as const,
+        sameSite: config.sameSitePolicy,
         domain: config.cookieDomain,
         maxAge: 15 * 60, // 15 minutes
       });
@@ -377,7 +369,6 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
   fastify.post<{ Body: OAuthLogoutRequest }>(`${basePath}/logout`, async (request, reply) => {
     try {
       const { sessionId, allSessions } = request.body;
-      const clientInfo = getClientInfo(request);
 
       // Get current user from request
       const user = await oauthIntegration.getCurrentUser(request);
@@ -452,7 +443,7 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
   });
 
   // Get OAuth system statistics
-  fastify.get(`${basePath}/stats`, async (request, reply) => {
+  fastify.get(`${basePath}/stats`, async (_request, reply) => {
     try {
       const oauthStats = oauthSystem.getStats();
       const integrationStats = await oauthIntegration.getIntegrationStats();
@@ -513,7 +504,7 @@ export function registerOAuthRoutes(fastify: FastifyInstance, config: OAuthRoute
   );
 
   // Health check for OAuth system
-  fastify.get(`${basePath}/health`, async (request, reply) => {
+  fastify.get(`${basePath}/health`, async (_request, reply) => {
     try {
       const stats = oauthSystem.getStats();
       const isHealthy = stats.providers.length > 0;

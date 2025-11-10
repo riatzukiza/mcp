@@ -108,18 +108,15 @@ function loadGoogleProviderConfig() {
 }
 /**
  * Get environment variable with default value
- * Checks both OAUTH_ and MCP_OAUTH_ prefixes
  */
 function getEnv(key, defaultValue = '') {
-    const value = process.env[key] || process.env[`MCP_${key}`];
-    return value || defaultValue;
+    return process.env[key] || defaultValue;
 }
 /**
  * Get required environment variable or throw error
- * Checks both OAUTH_ and MCP_OAUTH_ prefixes
  */
 function getRequiredEnv(key, defaultValue) {
-    const value = process.env[key] || process.env[`MCP_${key}`];
+    const value = process.env[key];
     if (value) {
         return value;
     }
