@@ -26,31 +26,31 @@ declare const MessagePayload: z.ZodEffects<z.ZodObject<{
     attachments: z.ZodOptional<z.ZodArray<z.ZodUnknown, "many">>;
 }, "strip", z.ZodTypeAny, {
     content?: string | undefined;
-    components?: unknown[] | undefined;
     embeds?: unknown[] | undefined;
     allowed_mentions?: unknown;
     tts?: boolean | undefined;
+    components?: unknown[] | undefined;
     attachments?: unknown[] | undefined;
 }, {
     content?: string | undefined;
-    components?: unknown[] | undefined;
     embeds?: unknown[] | undefined;
     allowed_mentions?: unknown;
     tts?: boolean | undefined;
+    components?: unknown[] | undefined;
     attachments?: unknown[] | undefined;
 }>, {
     content?: string | undefined;
-    components?: unknown[] | undefined;
     embeds?: unknown[] | undefined;
     allowed_mentions?: unknown;
     tts?: boolean | undefined;
+    components?: unknown[] | undefined;
     attachments?: unknown[] | undefined;
 }, {
     content?: string | undefined;
-    components?: unknown[] | undefined;
     embeds?: unknown[] | undefined;
     allowed_mentions?: unknown;
     tts?: boolean | undefined;
+    components?: unknown[] | undefined;
     attachments?: unknown[] | undefined;
 }>;
 declare const ListSchema: z.ZodObject<{
@@ -63,19 +63,19 @@ declare const ListSchema: z.ZodObject<{
     readonly around: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     provider?: string | undefined;
-    before?: string | undefined;
-    after?: string | undefined;
     tenant?: string | undefined;
     spaceUrn?: string | undefined;
     limit?: number | undefined;
+    before?: string | undefined;
+    after?: string | undefined;
     around?: string | undefined;
 }, {
     provider?: string | undefined;
-    before?: string | undefined;
-    after?: string | undefined;
     tenant?: string | undefined;
     spaceUrn?: string | undefined;
     limit?: number | undefined;
+    before?: string | undefined;
+    after?: string | undefined;
     around?: string | undefined;
 }>;
 export declare const createDiscordSendMessageTool: (proxyFactory?: ProxyFactory) => ToolFactory;
