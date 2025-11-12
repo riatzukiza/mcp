@@ -305,9 +305,9 @@ test('Configuration validation', (t) => {
 test('Environment file generation', (t) => {
   const envFile = AuthenticationFactory.createExampleEnvFile();
   t.truthy(envFile);
-  t.true(envFile.includes('MCP_OAUTH_ENABLED'));
-  t.true(envFile.includes('MCP_OAUTH_GITHUB_CLIENT_ID'));
-  t.true(envFile.includes('MCP_OAUTH_JWT_SECRET'));
+  t.true(envFile.includes('OAUTH_ENABLED'));
+  t.true(envFile.includes('OAUTH_GITHUB_CLIENT_ID'));
+  t.true(envFile.includes('OAUTH_JWT_SECRET'));
   t.true(envFile.includes('MCP_USER_REGISTRY_PATH'));
 });
 

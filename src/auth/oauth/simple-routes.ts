@@ -678,16 +678,14 @@ export function registerSimpleOAuthRoutes(
 
         try {
           // Validate required environment variables
-          const clientId =
-            process.env.MCP_OAUTH_GITHUB_CLIENT_ID || process.env.OAUTH_GITHUB_CLIENT_ID;
-          const clientSecret =
-            process.env.MCP_OAUTH_GITHUB_CLIENT_SECRET || process.env.OAUTH_GITHUB_CLIENT_SECRET;
+          const clientId = process.env.OAUTH_GITHUB_CLIENT_ID;
+          const clientSecret = process.env.OAUTH_GITHUB_CLIENT_SECRET;
 
           if (!clientId || !clientSecret) {
             return reply.status(500).send({
               error: 'configuration_error',
               message:
-                'GitHub OAuth credentials not configured. Please set MCP_OAUTH_GITHUB_CLIENT_ID and MCP_OAUTH_GITHUB_CLIENT_SECRET environment variables.',
+                'GitHub OAuth credentials not configured. Please set OAUTH_GITHUB_CLIENT_ID and OAUTH_GITHUB_CLIENT_SECRET environment variables.',
             });
           }
 
