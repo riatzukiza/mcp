@@ -5,7 +5,7 @@ import { strToU8, zipSync } from 'fflate';
 import { githubWorkflowGetJobLogs, githubWorkflowGetRunLogs } from '../tools/github/workflows.js';
 
 const buildResponse = (body: ReadonlyDeep<Uint8Array>): Response =>
-  new Response(body, {
+  new Response(new Uint8Array(body), {
     status: 200,
     headers: { 'content-type': 'application/zip' },
   });

@@ -38,11 +38,15 @@ const tryParseJson = (body: unknown): unknown => {
  * Simple OAuth route configuration
  */
 export type SimpleOAuthRouteConfig = Readonly<{
+  readonly basePath: string;
   readonly oauthSystem: OAuthSystem;
   readonly oauthIntegration: OAuthIntegration;
   readonly jwtManager: JwtTokenManager;
   readonly userRegistry: UserRegistry;
   readonly authManager: AuthenticationManager;
+  readonly cookieDomain?: string;
+  readonly secureCookies: boolean;
+  readonly sameSitePolicy: 'strict' | 'lax' | 'none';
 }>;
 
 /**
@@ -52,7 +56,22 @@ export function registerSimpleOAuthRoutes(
   fastify: FastifyInstance,
   config: SimpleOAuthRouteConfig,
 ): void {
-  const basePath = '/auth/oauth';
+  const { basePath } = config;
+
+  /**
+   * Get redirect URI - respects OAUTH_REDIRECT_URI env var or uses dynamic construction
+   */
+  function getRedirectUri(request: FastifyRequest): string {
+    // Check if OAuth system has a configured redirect URI
+    const oauthConfig = (config.oauthSystem as any).config?.redirectUri;
+    if (oauthConfig && !oauthConfig.includes('localhost')) {
+      // Use configured redirect URI (for production)
+      return oauthConfig;
+    }
+    
+    // Fallback to dynamic construction (for development/tunnels)
+    return `${getBaseUrl(request)}/auth/oauth/callback`;
+  }
 
   // Health check endpoint
   fastify.get(`${basePath}/health`, async (_request, reply) => {
@@ -303,10 +322,10 @@ export function registerSimpleOAuthRoutes(
         });
       }
 
-      // Use dynamic redirect URI based on current request to handle tunnels/proxies
-      const dynamicRedirectUri = `${getBaseUrl(request)}/auth/oauth/callback`;
+      // Use redirect URI from config or dynamic fallback
+      const dynamicRedirectUri = getRedirectUri(request);
 
-      // Start OAuth flow with the OAuthSystem using the dynamic redirect URI
+      // Start OAuth flow with OAuthSystem using dynamic redirect URI
       const { authUrl, state } = config.oauthSystem.startOAuthFlow(provider, dynamicRedirectUri);
 
       // Store redirect URL (in a real implementation, use secure session storage)
@@ -380,10 +399,10 @@ export function registerSimpleOAuthRoutes(
         });
       }
 
-      // Use dynamic redirect URI based on current request to handle tunnels/proxies
-      const dynamicRedirectUri = `${getBaseUrl(request)}/auth/oauth/callback`;
+      // Use redirect URI from config or dynamic fallback
+      const dynamicRedirectUri = getRedirectUri(request);
 
-      // Start OAuth flow with the OAuthSystem using the dynamic redirect URI
+      // Start OAuth flow with OAuthSystem using the dynamic redirect URI
       const { authUrl: providerAuthUrl, state: oauthState } = config.oauthSystem.startOAuthFlow(
         provider,
         dynamicRedirectUri,
@@ -694,7 +713,7 @@ export function registerSimpleOAuthRoutes(
             client_id: clientId,
             client_secret: clientSecret,
             code: code,
-            redirect_uri: getBaseUrl(request) + '/auth/oauth/callback',
+            redirect_uri: getRedirectUri(request),
           };
 
           // Add PKCE code verifier if present
@@ -816,7 +835,7 @@ export function registerSimpleOAuthRoutes(
       );
 
       // Set cookies manually
-      const cookieOptions = getCookieOptions();
+      const cookieOptions = getCookieOptions(config);
 
       reply.header('set-cookie', [
         `access_token=${tokenPair.accessToken}; ${cookieOptions}`,
@@ -909,7 +928,7 @@ export function registerSimpleOAuthRoutes(
   // Logout
   fastify.post(`${basePath}/logout`, async (_request, reply) => {
     // Clear cookies
-    const cookieOptions = getCookieOptions();
+    const cookieOptions = getCookieOptions(config);
 
     reply.header('set-cookie', [
       `access_token=; ${cookieOptions}; Expires=Thu, 01 Jan 1970 00:00:00 GMT`,
@@ -941,11 +960,15 @@ function getBaseUrl(request: FastifyRequest): string {
 /**
  * Get cookie options
  */
-function getCookieOptions(): string {
-  const isSecure = process.env.NODE_ENV === 'production';
-  const domain = process.env.OAUTH_COOKIE_DOMAIN;
+function getCookieOptions(config: SimpleOAuthRouteConfig): string {
+  const domain = config.cookieDomain;
 
-  const options = ['Path=/', 'HttpOnly', isSecure ? 'Secure' : '', 'SameSite=Lax'];
+  const options = [
+    'Path=/', 
+    'HttpOnly', 
+    config.secureCookies ? 'Secure' : '', 
+    `SameSite=${config.sameSitePolicy.charAt(0).toUpperCase() + config.sameSitePolicy.slice(1)}`
+  ];
 
   if (domain) {
     options.push(`Domain=${domain}`);

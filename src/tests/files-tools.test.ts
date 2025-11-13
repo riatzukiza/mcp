@@ -57,8 +57,10 @@ test('filesListDirectory - lists directory contents', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
+  // Set environment variable before importing tool
+  process.env.MCP_ROOT_PATH = tempDir;
   const tool = filesListDirectory(createMockContext());
-  const result = (await tool.invoke({ rel: tempDir })) as any;
+  const result = (await tool.invoke({ rel: '.' })) as any;
 
   t.true(result.ok);
   t.true(Array.isArray(result.entries));
@@ -75,20 +77,20 @@ test('filesListDirectory - respects includeHidden option', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesListDirectory(createMockContext());
+  const tool = filesListDirectory(createMockContext(tempDir));
 
-  const resultWithHidden = (await tool.invoke({ rel: tempDir, includeHidden: true })) as any;
+  const resultWithHidden = (await tool.invoke({ rel: '.', includeHidden: true })) as any;
   t.true(resultWithHidden.ok);
   t.true(resultWithHidden.entries.some((e: any) => e.name === '.hidden'));
 
-  const resultWithoutHidden = (await tool.invoke({ rel: tempDir, includeHidden: false })) as any;
+  const resultWithoutHidden = (await tool.invoke({ rel: '.', includeHidden: false })) as any;
   t.true(resultWithoutHidden.ok);
   t.false(resultWithoutHidden.entries.some((e: any) => e.name === '.hidden'));
 });
 
 test('filesListDirectory - handles non-existent directory', async (t) => {
   const tool = filesListDirectory(createMockContext());
-  const result = (await tool.invoke({ rel: '/non/existent/path' })) as any;
+  const result = (await tool.invoke({ rel: 'non-existent-path' })) as any;
 
   t.false(result.ok);
   t.true(result.error.includes('ENOENT') || result.error.includes('no such file'));
@@ -99,8 +101,8 @@ test('filesTreeDirectory - builds directory tree', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesTreeDirectory(createMockContext());
-  const result = (await tool.invoke({ rel: tempDir, depth: 2 })) as any;
+  const tool = filesTreeDirectory(createMockContext(tempDir));
+  const result = (await tool.invoke({ rel: '.', depth: 2 })) as any;
 
   t.true(result.ok);
   t.true(Array.isArray(result.entries));
@@ -119,8 +121,8 @@ test('filesTreeDirectory - respects depth limit', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesTreeDirectory(createMockContext());
-  const result = (await tool.invoke({ rel: tempDir, depth: 1 })) as any;
+  const tool = filesTreeDirectory(createMockContext(tempDir));
+  const result = (await tool.invoke({ rel: '.', depth: 1 })) as any;
 
   t.true(result.ok);
   const subdir = result.entries.find((e: any) => e.name === 'subdir');
@@ -134,12 +136,11 @@ test('filesViewFile - views complete file', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesViewFile(createMockContext());
-  const filePath = path.join(tempDir, 'test.txt');
-  const result = (await tool.invoke({ relOrFuzzy: filePath })) as any;
+  const tool = filesViewFile(createMockContext(tempDir));
+  const result = (await tool.invoke({ relOrFuzzy: 'test.txt' })) as any;
 
   t.true(result.ok);
-  t.is(result.path, filePath);
+  t.is(result.path, 'test.txt');
   t.true(result.content.includes('Hello World'));
   t.true(result.totalLines > 0);
 });
@@ -149,9 +150,8 @@ test('filesViewFile - views file with line context', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesViewFile(createMockContext());
-  const filePath = path.join(tempDir, 'test.txt');
-  const result = (await tool.invoke({ relOrFuzzy: filePath, line: 2, context: 1 })) as any;
+  const tool = filesViewFile(createMockContext(tempDir));
+  const result = (await tool.invoke({ relOrFuzzy: 'test.txt', line: 2, context: 1 })) as any;
 
   t.true(result.ok);
   t.true(result.snippet.includes('Line 2'));
@@ -159,7 +159,11 @@ test('filesViewFile - views file with line context', async (t) => {
 });
 
 test('filesViewFile - handles non-existent file', async (t) => {
-  const tool = filesViewFile(createMockContext());
+  const tempDir = createTempDir();
+  t.teardown(() => cleanupTempDir(tempDir));
+  createTestFiles(tempDir);
+
+  const tool = filesViewFile(createMockContext(tempDir));
   const result = (await tool.invoke({ relOrFuzzy: '/non/existent/file.txt' })) as any;
 
   t.false(result.ok);
@@ -171,7 +175,7 @@ test('filesViewFile - handles empty file', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesViewFile(createMockContext());
+  const tool = filesViewFile(createMockContext(tempDir));
   const filePath = path.join(tempDir, 'empty.txt');
   const result = (await tool.invoke({ relOrFuzzy: filePath })) as any;
 
@@ -184,7 +188,7 @@ test('filesWriteFileContent - writes new file', async (t) => {
   const tempDir = createTempDir();
   t.teardown(() => cleanupTempDir(tempDir));
 
-  const tool = filesWriteFileContent(createMockContext());
+  const tool = filesWriteFileContent(createMockContext(tempDir));
   const filePath = path.join(tempDir, 'new.txt');
   const content = 'Test content\nLine 2';
 
@@ -202,7 +206,7 @@ test('filesWriteFileContent - overwrites existing file', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesWriteFileContent(createMockContext());
+  const tool = filesWriteFileContent(createMockContext(tempDir));
   const filePath = path.join(tempDir, 'test.txt');
   const newContent = 'Completely new content';
 
@@ -218,7 +222,7 @@ test('filesWriteFileContent - creates directories if needed', async (t) => {
   const tempDir = createTempDir();
   t.teardown(() => cleanupTempDir(tempDir));
 
-  const tool = filesWriteFileContent(createMockContext());
+  const tool = filesWriteFileContent(createMockContext(tempDir));
   const filePath = path.join(tempDir, 'new', 'subdir', 'file.txt');
   const content = 'Content in nested dir';
 
@@ -234,7 +238,7 @@ test('filesWriteFileLines - inserts lines at specific position', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesWriteFileLines(createMockContext());
+  const tool = filesWriteFileLines(createMockContext(tempDir));
   const filePath = path.join(tempDir, 'test.txt');
   const lines = ['Inserted line 1', 'Inserted line 2'];
 
@@ -252,7 +256,7 @@ test('filesWriteFileLines - appends to end of file', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesWriteFileLines(createMockContext());
+  const tool = filesWriteFileLines(createMockContext(tempDir));
   const filePath = path.join(tempDir, 'test.txt');
   const originalContent = fs.readFileSync(filePath, 'utf8');
   const originalLineCount = originalContent.split('\n').length;
@@ -271,7 +275,7 @@ test('filesWriteFileLines - handles invalid startLine', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesWriteFileLines(createMockContext());
+  const tool = filesWriteFileLines(createMockContext(tempDir));
   const filePath = path.join(tempDir, 'test.txt');
   const lines = ['Test line'];
 
@@ -286,7 +290,7 @@ test('filesSearch - searches text content', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const result = (await tool.invoke({ query: 'Hello', rel: tempDir })) as any;
 
   t.true(result.ok);
@@ -303,7 +307,7 @@ test('filesSearch - searches with regex', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const result = (await tool.invoke({ query: 'TODO|FIXME', regex: true, rel: tempDir })) as any;
 
   t.true(result.ok);
@@ -320,7 +324,7 @@ test('filesSearch - respects case sensitivity', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
 
   // Case sensitive (default)
   const caseSensitiveResult = (await tool.invoke({
@@ -344,7 +348,7 @@ test('filesSearch - respects include/exclude globs', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
 
   // Include only .txt files
   const includeResult = (await tool.invoke({
@@ -370,7 +374,7 @@ test('filesSearch - respects maxResults limit', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const result = (await tool.invoke({ query: 'Line', maxResults: 2, rel: tempDir })) as any;
 
   t.true(result.ok);
@@ -382,7 +386,7 @@ test('filesSearch - respects maxFileSizeBytes limit', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const result = (await tool.invoke({
     query: 'A', // Should find many 'A's in large.txt
     maxFileSizeBytes: 500, // But large.txt is 1000 bytes
@@ -399,7 +403,7 @@ test('filesSearch - sorts results by path', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const result = (await tool.invoke({ query: 'content', sortBy: 'path', rel: tempDir })) as any;
 
   t.true(result.ok);
@@ -413,7 +417,11 @@ test('filesSearch - sorts results by path', async (t) => {
 });
 
 test('filesSearch - handles non-existent directory', async (t) => {
-  const tool = filesSearch(createMockContext());
+  const tempDir = createTempDir();
+  t.teardown(() => cleanupTempDir(tempDir));
+  createTestFiles(tempDir);
+
+  const tool = filesSearch(createMockContext(tempDir));
   const result = (await tool.invoke({ query: 'test', rel: '/non/existent/path' })) as any;
 
   t.true(result.ok);
@@ -426,7 +434,7 @@ test('filesSearch - handles empty query', async (t) => {
   t.teardown(() => cleanupTempDir(tempDir));
   createTestFiles(tempDir);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const result = (await tool.invoke({ query: '', rel: tempDir })) as any;
 
   t.true(result.ok);
@@ -495,7 +503,11 @@ test('filesTreeDirectory validates depth', async (t) => {
 });
 
 test('filesViewFile validates line numbers', async (t) => {
-  const tool = filesViewFile(createMockContext());
+  const tempDir = createTempDir();
+  t.teardown(() => cleanupTempDir(tempDir));
+  createTestFiles(tempDir);
+  
+  const tool = filesViewFile(createMockContext(tempDir));
 
   // Invalid line should throw
   await t.throwsAsync(
@@ -510,7 +522,11 @@ test('filesViewFile validates line numbers', async (t) => {
 });
 
 test('filesWriteFileLines validates parameters', async (t) => {
-  const tool = filesWriteFileLines(createMockContext());
+  const tempDir = createTempDir();
+  t.teardown(() => cleanupTempDir(tempDir));
+  createTestFiles(tempDir);
+
+  const tool = filesWriteFileLines(createMockContext(tempDir));
 
   // Empty lines array should throw
   await t.throwsAsync(
@@ -526,7 +542,11 @@ test('filesWriteFileLines validates parameters', async (t) => {
 });
 
 test('filesSearch validates search parameters', async (t) => {
-  const tool = filesSearch(createMockContext());
+  const tempDir = createTempDir();
+  t.teardown(() => cleanupTempDir(tempDir));
+  createTestFiles(tempDir);
+
+  const tool = filesSearch(createMockContext(tempDir));
 
   // Invalid maxDepth should throw
   await t.throwsAsync(

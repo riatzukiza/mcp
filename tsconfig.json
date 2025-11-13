@@ -14,9 +14,7 @@
   "exclude": [
     "dist",
     "node_modules",
-    "test",
     "pseudo",
-    "examples",
-    "src/tests/**"
+    "examples"
   ]
 }
