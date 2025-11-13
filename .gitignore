@@ -36,3 +36,4 @@ coverage/
 # Cache directories
 .cache/
 *.cache
+test.txt
