@@ -22,25 +22,52 @@ const isResponse = (message: JSONRPCMessage): boolean =>
 const isRequest = (message: JSONRPCMessage): boolean =>
   typeof (message as { method?: unknown }).method === 'string';
 
-const isValidJsonRpcMessage = (message: unknown): boolean => {
-  // Must be an object
-  if (typeof message !== 'object' || message === null) {
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const hasValidJsonRpcId = (value: unknown): value is string | number | null =>
+  typeof value === 'string' || typeof value === 'number' || value === null;
+
+export const isValidJsonRpcMessage = (message: unknown): message is JSONRPCMessage => {
+  if (!isObjectRecord(message)) {
     return false;
   }
 
-  const msg = message as Record<string, unknown>;
-
-  // Must have jsonrpc: "2.0"
-  if (msg.jsonrpc !== '2.0') {
+  if (message.jsonrpc !== '2.0') {
     return false;
   }
 
-  // Must be either a request (has method) or a response (has result or error)
-  const hasMethod = typeof msg.method === 'string';
-  const hasResult = 'result' in msg;
-  const hasError = 'error' in msg;
+  const hasMethod = typeof message.method === 'string';
+  const hasResult = Object.prototype.hasOwnProperty.call(message, 'result');
+  const hasError = Object.prototype.hasOwnProperty.call(message, 'error');
 
-  return hasMethod || hasResult || hasError;
+  if ((hasResult && hasError) || (!hasMethod && !hasResult && !hasError)) {
+    return false;
+  }
+
+  if ('id' in message && !hasValidJsonRpcId(message.id)) {
+    return false;
+  }
+
+  if (hasMethod) {
+    return true;
+  }
+
+  if (hasResult) {
+    if (!('id' in message) || !hasValidJsonRpcId(message.id)) {
+      return false;
+    }
+    return typeof message.result !== 'string';
+  }
+
+  if (hasError) {
+    if (!('id' in message) || !hasValidJsonRpcId(message.id)) {
+      return false;
+    }
+    return isObjectRecord(message.error);
+  }
+
+  return false;
 };
 export const createStdioEnv = (
   overrides: Readonly<Record<string, string>> = {},

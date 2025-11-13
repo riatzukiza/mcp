@@ -1,3 +1,4 @@
+import type { Stats } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { validateMcpOperation } from './validation/index.js';
@@ -93,6 +94,7 @@ export const viewFile = async (
     endLine: end,
     focusLine: L,
     snippet: lines.slice(start - 1, end).join('\n'),
+    content: raw,
   };
 };
 
@@ -275,18 +277,71 @@ const validatePathSecurity = async (ROOT_PATH: string, targetPath: string): Prom
   }
 };
 
+const traversalErrorPatterns = [
+  'path traversal',
+  'path normalization',
+  'glob pattern attack',
+  'absolute path',
+  'outside root',
+];
+
+const formatPathValidationError = (rawMessage: string | undefined): Error => {
+  if (!rawMessage) {
+    return new Error('Invalid path');
+  }
+  const lowered = rawMessage.toLowerCase();
+  if (traversalErrorPatterns.some((pattern) => lowered.includes(pattern))) {
+    return new Error('path outside root');
+  }
+  return new Error(`Invalid path: ${rawMessage}`);
+};
+
+const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException =>
+  Boolean(error) && typeof error === 'object' && 'code' in (error as NodeJS.ErrnoException)
+    ? (error as NodeJS.ErrnoException).code === code
+    : false;
+
+const ensureWritableTarget = async (ROOT_PATH: string, absPath: string): Promise<void> => {
+  let stats: Stats;
+  try {
+    stats = await fs.lstat(absPath);
+  } catch (error) {
+    if (isErrno(error, 'ENOENT')) {
+      return; // Nothing on disk yet – safe to create
+    }
+    throw error;
+  }
+
+  if (!stats.isSymbolicLink()) {
+    return;
+  }
+
+  try {
+    const resolvedTarget = await fs.realpath(absPath);
+    if (!isInsideRoot(ROOT_PATH, resolvedTarget)) {
+      throw new Error('symlink escape detected');
+    }
+  } catch (error) {
+    if (isErrno(error, 'ENOENT')) {
+      throw new Error('broken symlink target does not exist');
+    }
+    throw error;
+  }
+};
+
 // Write a file with utf8 encoding.
 export const writeFileContent = async (ROOT_PATH: string, filePath: string, content: string) => {
   // Validate input using comprehensive framework first
   const validationResult = await validateMcpOperation(ROOT_PATH, filePath, 'write');
   if (!validationResult.valid) {
-    throw new Error(`Invalid path: ${validationResult.error}`);
+    throw formatPathValidationError(validationResult.error);
   }
 
   const abs = normalizeToRoot(ROOT_PATH, validationResult.sanitizedPath!);
 
   // Validate path security before any file operations
   await validatePathSecurity(ROOT_PATH, abs);
+  await ensureWritableTarget(ROOT_PATH, abs);
 
   // Also validate the parent directory path before mkdir
   const parentDir = path.dirname(abs);
@@ -309,15 +364,21 @@ export const writeFileLines = async (
   // Validate input using comprehensive framework first
   const validationResult = await validateMcpOperation(ROOT_PATH, filePath, 'write');
   if (!validationResult.valid) {
-    throw new Error(`Invalid path: ${validationResult.error}`);
+    throw formatPathValidationError(validationResult.error);
   }
 
   const abs = normalizeToRoot(ROOT_PATH, validationResult.sanitizedPath!);
 
   // Validate path security before writing
   await validatePathSecurity(ROOT_PATH, abs);
+  await ensureWritableTarget(ROOT_PATH, abs);
 
-  await fs.mkdir(path.dirname(abs), { recursive: true });
+  const parentDir = path.dirname(abs);
+  if (parentDir !== abs) {
+    await validatePathSecurity(ROOT_PATH, parentDir);
+  }
+
+  await fs.mkdir(parentDir, { recursive: true });
   let fileLines: string[] = [];
   try {
     const raw = await fs.readFile(abs, 'utf8');

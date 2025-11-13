@@ -5,7 +5,40 @@ import { minimatch } from 'minimatch';
 import { getMcpRoot, normalizeToRoot, isInsideRoot } from '../files.js';
 import type { ToolFactory, ToolSpec } from '../core/types.js';
 
-const resolveRoot = () => getMcpRoot();
+const formatError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown error';
+  }
+};
+
+const buildRootResolver = (ctx?: Parameters<ToolFactory>[0]) => {
+  const contextRoot = ctx?.env?.MCP_ROOT_PATH;
+  if (typeof contextRoot === 'string' && contextRoot.trim().length > 0) {
+    const resolved = path.resolve(contextRoot);
+    return () => resolved;
+  }
+  return () => getMcpRoot();
+};
+
+const coerceToRootRelative = (root: string, candidate: string): string => {
+  if (!path.isAbsolute(candidate)) {
+    return candidate;
+  }
+  const resolved = path.resolve(candidate);
+  if (!isInsideRoot(root, resolved)) {
+    return candidate;
+  }
+  const relative = path.relative(root, resolved);
+  return relative.length === 0 ? '.' : relative;
+};
 
 const textFile = (name: string) => {
   const ext = path.extname(name).toLowerCase();
@@ -47,7 +80,8 @@ const walk = async (
   return out;
 };
 
-export const filesSearch: ToolFactory = () => {
+export const filesSearch: ToolFactory = (ctx) => {
+  const resolveRoot = buildRootResolver(ctx);
   const shape = {
     query: z.string().describe('string or regex pattern'),
     regex: z.boolean().default(false),
@@ -105,56 +139,62 @@ export const filesSearch: ToolFactory = () => {
       excludeGlobs,
       sortBy,
     } = args;
-    const ROOT = resolveRoot();
-    const baseAbs = normalizeToRoot(ROOT, rel);
-    const files = (await walk(baseAbs, { includeHidden, maxDepth }))
-      .filter((p) => isInsideRoot(ROOT, p))
-      .filter((p) => textFile(p))
-      .filter((abs) => {
-        const relPath = path.relative(ROOT, abs).replace(/\\/g, '/');
-        const included = includeGlobs.some((g) => minimatch(relPath, g));
-        const excluded = excludeGlobs.some((g) => minimatch(relPath, g));
-        return included && !excluded;
-      });
 
-    const flags = caseSensitive ? '' : 'i';
-    const pattern = regex
-      ? new RegExp(query, flags)
-      : new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+    try {
+      const ROOT = resolveRoot();
+      const relOrRoot = coerceToRootRelative(ROOT, rel);
+      const baseAbs = normalizeToRoot(ROOT, relOrRoot);
+      const files = (await walk(baseAbs, { includeHidden, maxDepth }))
+        .filter((p) => isInsideRoot(ROOT, p))
+        .filter((p) => textFile(p))
+        .filter((abs) => {
+          const relPath = path.relative(ROOT, abs).replace(/\\/g, '/');
+          const included = includeGlobs.some((g) => minimatch(relPath, g));
+          const excluded = excludeGlobs.some((g) => minimatch(relPath, g));
+          return included && !excluded;
+        });
 
-    const results: Array<{ path: string; line: number; snippet: string }> = [];
+      const flags = caseSensitive ? '' : 'i';
+      const pattern = regex
+        ? new RegExp(query, flags)
+        : new RegExp(query.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'), flags);
 
-    for (const f of files) {
-      if (results.length >= maxResults) break;
-      try {
-        const st = await fs.stat(f);
-        if (st.size > maxFileSizeBytes) continue;
-        if (!textFile(f)) continue;
-        const rawTxt = await fs.readFile(f, 'utf8');
-        const lines = rawTxt.split(/\r?\n/);
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line === undefined) continue;
-          if (pattern.test(line)) {
-            results.push({
-              path: path.relative(ROOT, f).replace(/\\/g, '/'),
-              line: i + 1,
-              snippet: line,
-            });
-            if (results.length >= maxResults) break;
+      const results: Array<{ path: string; line: number; snippet: string }> = [];
+
+      for (const f of files) {
+        if (results.length >= maxResults) break;
+        try {
+          const st = await fs.stat(f);
+          if (st.size > maxFileSizeBytes) continue;
+          if (!textFile(f)) continue;
+          const rawTxt = await fs.readFile(f, 'utf8');
+          const lines = rawTxt.split(/\r?\n/);
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line === undefined) continue;
+            if (pattern.test(line)) {
+              results.push({
+                path: path.relative(ROOT, f).replace(/\\/g, '/'),
+                line: i + 1,
+                snippet: line,
+              });
+              if (results.length >= maxResults) break;
+            }
           }
+        } catch {
+          /* ignore file errors */
         }
-      } catch {
-        /* ignore file errors */
       }
+
+      const ordered =
+        sortBy === 'path'
+          ? [...results].sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line)
+          : [...results].sort((a, b) => a.line - b.line || a.path.localeCompare(b.path));
+
+      return { ok: true, count: ordered.length, results: ordered };
+    } catch (error) {
+      return { ok: false, error: formatError(error) };
     }
-
-    const ordered =
-      sortBy === 'path'
-        ? [...results].sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line)
-        : [...results].sort((a, b) => a.line - b.line || a.path.localeCompare(b.path));
-
-    return { ok: true, count: ordered.length, results: ordered };
   };
 
   return { spec, invoke };

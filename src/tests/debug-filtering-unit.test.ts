@@ -1,28 +1,11 @@
 import test from "ava";
+import { isValidJsonRpcMessage } from "../proxy/stdio-proxy.js";
 
 /**
  * Unit tests for the debug filtering function.
  * These tests ensure the `isValidJsonRpcMessage` function correctly separates
  * debug output from protocol messages.
  */
-
-// Import the function from the stdio proxy
-// Note: This function should be exported from stdio-proxy.ts for testing
-// For now, we'll recreate it here for testing purposes
-
-const isValidJsonRpcMessage = (message: unknown): boolean => {
-  if (typeof message !== "object" || message === null) {
-    return false;
-  }
-  const msg = message as Record<string, unknown>;
-  if (msg.jsonrpc !== "2.0") {
-    return false;
-  }
-  const hasMethod = typeof msg.method === "string";
-  const hasResult = "result" in msg;
-  const hasError = "error" in msg;
-  return hasMethod || hasResult || hasError;
-};
 
 test("NEGATIVE: Debug output must be filtered out from JSON-RPC messages", (t) => {
   // These are examples of debug output that should NOT be considered valid JSON-RPC

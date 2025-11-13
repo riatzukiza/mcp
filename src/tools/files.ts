@@ -1,7 +1,9 @@
+import path from 'node:path';
 import { z } from 'zod';
 
 import {
   getMcpRoot,
+  isInsideRoot,
   listDirectory,
   treeDirectory,
   viewFile,
@@ -10,11 +12,57 @@ import {
 } from '../files.js';
 import type { ToolFactory, ToolSpec } from '../core/types.js';
 
-// Unified sandbox-root resolver
-// If MCP_ROOT_PATH isn't set, default to CWD at runtime.
-const resolveRoot = () => getMcpRoot();
+const formatError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown error';
+  }
+};
 
-export const filesListDirectory: ToolFactory = () => {
+const buildRootResolver = (ctx?: Parameters<ToolFactory>[0]) => {
+  const contextRoot = ctx?.env?.MCP_ROOT_PATH;
+  if (typeof contextRoot === 'string' && contextRoot.trim().length > 0) {
+    const resolved = path.resolve(contextRoot);
+    return () => resolved;
+  }
+  return () => getMcpRoot();
+};
+
+type ToolError = { ok: false; error: string };
+
+const withErrorHandling = async <T, R = T>(
+  operation: () => Promise<T>,
+  onSuccess?: (value: T) => R,
+): Promise<R | ToolError> => {
+  try {
+    const value = await operation();
+    return onSuccess ? onSuccess(value) : ((value as unknown) as R);
+  } catch (error) {
+    return { ok: false, error: formatError(error) };
+  }
+};
+
+const coerceToRootRelative = (root: string, candidate: string): string => {
+  if (!path.isAbsolute(candidate)) {
+    return candidate;
+  }
+  const resolved = path.resolve(candidate);
+  if (!isInsideRoot(root, resolved)) {
+    return candidate;
+  }
+  const relative = path.relative(root, resolved);
+  return relative.length === 0 ? '.' : relative;
+};
+
+export const filesListDirectory: ToolFactory = (ctx) => {
+  const resolveRoot = buildRootResolver(ctx);
   const shape = {
     rel: z.string().default('.'),
     includeHidden: z.boolean().optional(),
@@ -37,13 +85,16 @@ export const filesListDirectory: ToolFactory = () => {
     const args = Schema.parse(raw);
     const { rel, includeHidden } = args;
     const options = typeof includeHidden === 'boolean' ? { includeHidden } : {};
-    return listDirectory(resolveRoot(), rel, options);
+    const root = resolveRoot();
+    const target = coerceToRootRelative(root, rel);
+    return withErrorHandling(() => listDirectory(root, target, options));
   };
 
   return { spec, invoke };
 };
 
-export const filesTreeDirectory: ToolFactory = () => {
+export const filesTreeDirectory: ToolFactory = (ctx) => {
+  const resolveRoot = buildRootResolver(ctx);
   const shape = {
     rel: z.string().default('.'),
     includeHidden: z.boolean().optional(),
@@ -72,13 +123,16 @@ export const filesTreeDirectory: ToolFactory = () => {
       depth,
       ...(typeof includeHidden === 'boolean' ? { includeHidden } : {}),
     };
-    return treeDirectory(resolveRoot(), rel, options);
+    const root = resolveRoot();
+    const target = coerceToRootRelative(root, rel);
+    return withErrorHandling(() => treeDirectory(root, target, options));
   };
 
   return { spec, invoke };
 };
 
-export const filesViewFile: ToolFactory = () => {
+export const filesViewFile: ToolFactory = (ctx) => {
+  const resolveRoot = buildRootResolver(ctx);
   const shape = {
     relOrFuzzy: z.string(),
     line: z.number().int().min(1).optional(),
@@ -102,12 +156,18 @@ export const filesViewFile: ToolFactory = () => {
   const invoke = async (raw: unknown) => {
     const args = Schema.parse(raw);
     const { relOrFuzzy: rel, line, context } = args;
-    return viewFile(resolveRoot(), rel, line, context);
+    const root = resolveRoot();
+    const target = coerceToRootRelative(root, rel);
+    return withErrorHandling(
+      () => viewFile(root, target, line, context),
+      (result) => ({ ok: true, ...result }),
+    );
   };
   return { spec, invoke };
 };
 
-export const filesWriteFileContent: ToolFactory = () => {
+export const filesWriteFileContent: ToolFactory = (ctx) => {
+  const resolveRoot = buildRootResolver(ctx);
   const shape = {
     filePath: z.string(),
     content: z.string(),
@@ -130,12 +190,18 @@ export const filesWriteFileContent: ToolFactory = () => {
   const invoke = async (raw: unknown) => {
     const args = Schema.parse(raw);
     const { filePath, content } = args;
-    return writeFileContent(resolveRoot(), filePath, content);
+    const root = resolveRoot();
+    const target = coerceToRootRelative(root, filePath);
+    return withErrorHandling(
+      () => writeFileContent(root, target, content),
+      (result) => ({ ok: true, ...result }),
+    );
   };
   return { spec, invoke };
 };
 
-export const filesWriteFileLines: ToolFactory = () => {
+export const filesWriteFileLines: ToolFactory = (ctx) => {
+  const resolveRoot = buildRootResolver(ctx);
   const shape = {
     filePath: z.string(),
     lines: z.array(z.string()),
@@ -163,7 +229,12 @@ export const filesWriteFileLines: ToolFactory = () => {
   const invoke = async (raw: unknown) => {
     const args = Schema.parse(raw);
     const { filePath, lines, startLine } = args;
-    return writeFileLines(resolveRoot(), filePath, lines, startLine);
+    const root = resolveRoot();
+    const target = coerceToRootRelative(root, filePath);
+    return withErrorHandling(
+      () => writeFileLines(root, target, lines, startLine),
+      (result) => ({ ok: true, ...result }),
+    );
   };
   return { spec, invoke };
 };

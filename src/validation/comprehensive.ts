@@ -13,7 +13,7 @@ import { z } from 'zod';
 // Security Validation Constants
 // ============================================================================
 
-const DANGEROUS_CHARS = ['<', '>', '|', '&', ';', '`', '$', '"', "'", '\r', '\n'];
+const DANGEROUS_CHARS = ['<', '>', '|', ';', '`', '$', '"', "'", '\r', '\n'];
 const WINDOWS_RESERVED_NAMES = [
   'CON',
   'PRN',

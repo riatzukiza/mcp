@@ -23,8 +23,8 @@ const cleanupTempDir = (tempDir: string): void => {
 };
 
 // Create a mock tool context for testing
-const createMockContext = () => ({
-  env: {},
+const createMockContext = (tempDir?: string) => ({
+  env: tempDir ? { MCP_ROOT_PATH: tempDir } : {},
   fetch: global.fetch,
   now: () => new Date(),
 });
@@ -34,7 +34,7 @@ test('filesListDirectory - handles empty directory', async (t) => {
   const tempDir = createTempDir();
   t.teardown(() => cleanupTempDir(tempDir));
 
-  const tool = filesListDirectory(createMockContext());
+  const tool = filesListDirectory(createMockContext(tempDir));
   const result = await tool.invoke({ rel: tempDir }) as any;
 
   t.true(result.ok);
@@ -49,7 +49,7 @@ test('filesListDirectory - handles directory with only hidden files', async (t) 
   fs.mkdirSync(path.join(tempDir, '.hidden'));
   fs.writeFileSync(path.join(tempDir, '.hidden', 'file.txt'), 'content');
 
-  const tool = filesListDirectory(createMockContext());
+  const tool = filesListDirectory(createMockContext(tempDir));
 
   const resultWithHidden = await tool.invoke({ rel: tempDir, includeHidden: true }) as any;
   t.true(resultWithHidden.ok);
@@ -72,7 +72,7 @@ test('filesListDirectory - handles very long directory paths', async (t) => {
   }
   fs.writeFileSync(path.join(currentPath, 'deep.txt'), 'Deep content');
 
-  const tool = filesListDirectory(createMockContext());
+  const tool = filesListDirectory(createMockContext(tempDir));
   const result = await tool.invoke({ rel: path.relative(tempDir, currentPath) }) as any;
 
   t.true(result.ok);
@@ -91,7 +91,7 @@ test('filesTreeDirectory - handles very deep directory structures', async (t) =>
     fs.mkdirSync(currentPath);
   }
 
-  const tool = filesTreeDirectory(createMockContext());
+  const tool = filesTreeDirectory(createMockContext(tempDir));
   const result = await tool.invoke({ rel: tempDir, depth: 1000 }) as any;
 
   t.true(result.ok);
@@ -107,7 +107,7 @@ test('filesViewFile - handles binary files gracefully', async (t) => {
   const binaryContent = Buffer.from([0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE]);
   fs.writeFileSync(path.join(tempDir, 'binary.bin'), binaryContent);
 
-  const tool = filesViewFile(createMockContext());
+  const tool = filesViewFile(createMockContext(tempDir));
   const result = await tool.invoke({ relOrFuzzy: path.join(tempDir, 'binary.bin') }) as any;
 
   t.true(result.ok);
@@ -122,7 +122,7 @@ test('filesViewFile - handles files with very long lines', async (t) => {
   const longLine = 'A'.repeat(100000) + '\nSecond line';
   fs.writeFileSync(path.join(tempDir, 'longline.txt'), longLine);
 
-  const tool = filesViewFile(createMockContext());
+  const tool = filesViewFile(createMockContext(tempDir));
   const result = await tool.invoke({ relOrFuzzy: path.join(tempDir, 'longline.txt') }) as any;
 
   t.true(result.ok);
@@ -136,7 +136,7 @@ test('filesViewFile - handles Unicode and special characters', async (t) => {
   const unicodeContent = '🚀 Unicode test\n中文测试\nالعربية\nעברית\n🔥 Fire emoji';
   fs.writeFileSync(path.join(tempDir, 'unicode.txt'), unicodeContent);
 
-  const tool = filesViewFile(createMockContext());
+  const tool = filesViewFile(createMockContext(tempDir));
   const result = await tool.invoke({ relOrFuzzy: path.join(tempDir, 'unicode.txt') }) as any;
 
   t.true(result.ok);
@@ -152,7 +152,7 @@ test('filesViewFile - handles very large files', async (t) => {
   const largeContent = 'Large file content\n'.repeat(50000);
   fs.writeFileSync(path.join(tempDir, 'large.txt'), largeContent);
 
-  const tool = filesViewFile(createMockContext());
+  const tool = filesViewFile(createMockContext(tempDir));
   const result = await tool.invoke({ relOrFuzzy: path.join(tempDir, 'large.txt') }) as any;
 
   t.true(result.ok);
@@ -167,7 +167,7 @@ test('filesViewFile - handles files with no line endings', async (t) => {
   const noLineEndings = 'This is all one line without any line breaks at all';
   fs.writeFileSync(path.join(tempDir, 'nolinebreaks.txt'), noLineEndings);
 
-  const tool = filesViewFile(createMockContext());
+  const tool = filesViewFile(createMockContext(tempDir));
   const result = await tool.invoke({ relOrFuzzy: path.join(tempDir, 'nolinebreaks.txt') }) as any;
 
   t.true(result.ok);
@@ -183,7 +183,7 @@ test('filesWriteFileContent - handles very large content', async (t) => {
   const largeContent = 'X'.repeat(1_000_000); // 1MB
   const filePath = path.join(tempDir, 'large.txt');
 
-  const tool = filesWriteFileContent(createMockContext());
+  const tool = filesWriteFileContent(createMockContext(tempDir));
   const result = await tool.invoke({ filePath, content: largeContent }) as any;
 
   t.true(result.ok);
@@ -200,7 +200,7 @@ test('filesWriteFileContent - handles content with null bytes', async (t) => {
   const contentWithNulls = 'Before\x00After\x00End';
   const filePath = path.join(tempDir, 'nulls.txt');
 
-  const tool = filesWriteFileContent(createMockContext());
+  const tool = filesWriteFileContent(createMockContext(tempDir));
   const result = await tool.invoke({ filePath, content: contentWithNulls }) as any;
 
   t.true(result.ok);
@@ -218,7 +218,7 @@ test('filesWriteFileContent - handles file paths with special characters', async
   const specialName = 'file with spaces & symbols.txt';
   const filePath = path.join(tempDir, specialName);
 
-  const tool = filesWriteFileContent(createMockContext());
+  const tool = filesWriteFileContent(createMockContext(tempDir));
   const result = await tool.invoke({ filePath, content: 'Special content' }) as any;
 
   t.true(result.ok);
@@ -237,7 +237,7 @@ test('filesWriteFileLines - handles inserting into very large files', async (t) 
   const largeContent = 'Line '.repeat(50000);
   fs.writeFileSync(path.join(tempDir, 'large.txt'), largeContent);
 
-  const tool = filesWriteFileLines(createMockContext());
+  const tool = filesWriteFileLines(createMockContext(tempDir));
   const result = await tool.invoke({
     filePath: path.join(tempDir, 'large.txt'),
     lines: ['INSERTED LINE'],
@@ -256,7 +256,7 @@ test('filesWriteFileLines - handles lines with special characters', async (t) =>
 
   fs.writeFileSync(path.join(tempDir, 'test.txt'), 'Original line');
 
-  const tool = filesWriteFileLines(createMockContext());
+  const tool = filesWriteFileLines(createMockContext(tempDir));
   const result = await tool.invoke({
     filePath: path.join(tempDir, 'test.txt'),
     lines: ['Special chars: àáâãäå 🚀', "Quotes: 'single' and \"double\""],
@@ -279,7 +279,7 @@ test('filesSearch - handles empty search patterns', async (t) => {
 
   fs.writeFileSync(path.join(tempDir, 'test.txt'), 'Line 1\nLine 2');
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
 
   // Empty string should match everything (grep behavior)
   const result = await tool.invoke({ query: '', rel: tempDir }) as any;
@@ -294,7 +294,7 @@ test('filesSearch - handles very long search patterns', async (t) => {
 
   fs.writeFileSync(path.join(tempDir, 'test.txt'), 'Short line');
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const longQuery = 'A'.repeat(10000);
 
   const result = await tool.invoke({ query: longQuery, rel: tempDir }) as any;
@@ -310,7 +310,7 @@ test('filesSearch - handles files with mixed line endings', async (t) => {
   const mixedContent = 'Line 1\r\nLine 2\nLine 3\r\nLine 4\n';
   fs.writeFileSync(path.join(tempDir, 'mixed.txt'), mixedContent);
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const result = await tool.invoke({ query: 'Line', rel: tempDir }) as any;
 
   t.true(result.ok);
@@ -329,7 +329,7 @@ test('filesSearch - handles very deep directory structures', async (t) => {
     fs.writeFileSync(path.join(currentPath, 'file.txt'), `Content at level ${i}`);
   }
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
   const result = await tool.invoke({
     query: 'Content',
     rel: tempDir,
@@ -350,7 +350,7 @@ test('files tools handle resource exhaustion gracefully', async (t) => {
     fs.writeFileSync(path.join(tempDir, `file${i}.txt`), `Content ${i}`);
   }
 
-  const listTool = filesListDirectory(createMockContext());
+  const listTool = filesListDirectory(createMockContext(tempDir));
   const result = await listTool.invoke({ rel: tempDir }) as any;
 
   t.true(result.ok);
@@ -363,7 +363,7 @@ test('filesSearch handles extreme parameters without crashing', async (t) => {
 
   fs.writeFileSync(path.join(tempDir, 'test.txt'), 'Test content');
 
-  const tool = filesSearch(createMockContext());
+  const tool = filesSearch(createMockContext(tempDir));
 
   // Test with extreme parameter values
   const extremeResult = await tool.invoke({
