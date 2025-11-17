@@ -29,10 +29,16 @@ export class OAuthSystem {
   private readonly providers = new Map<string, OAuthProvider>();
   private readonly states = new Map<string, OAuthState>();
   private readonly sessions = new Map<string, OAuthSession>();
+  private readonly allowedRedirects: Set<string>;
   // Map OAuth client IDs to provider names for ChatGPT/MCP token flows
   private readonly clientIdToProvider = new Map<string, string>();
   constructor(config: OAuthSystemConfig) {
     this.config = config;
+
+    const allowlist = [config.redirectUri, ...(config.redirectAllowlist ?? [])]
+      .map((uri) => uri?.trim())
+      .filter((uri): uri is string => Boolean(uri));
+    this.allowedRedirects = new Set(allowlist);
 
     // Initialize providers
     this.initializeProviders();
@@ -55,6 +61,15 @@ export class OAuthSystem {
     return this.providers.has(provider);
   }
 
+  private resolveRedirectUri(requested?: string): string {
+    const candidate = (requested ?? this.config.redirectUri)?.trim();
+    const finalUri = candidate || this.config.redirectUri;
+    if (!this.allowedRedirects.has(finalUri)) {
+      throw new Error(`Invalid redirect URI: ${finalUri}`);
+    }
+    return finalUri;
+  }
+
   /**
    * Start OAuth flow
    */
@@ -72,31 +87,20 @@ export class OAuthSystem {
       throw new Error(`OAuth provider not available: ${provider}`);
     }
 
-    let codeVerifier: string | undefined;
-    let codeChallenge: string | undefined;
-    let codeChallengeMethod: string | undefined;
+    let codeVerifier = pkceOptions?.codeVerifier ?? this.generateCodeVerifier();
 
-    if (pkceOptions?.codeVerifier) {
-      codeVerifier = pkceOptions.codeVerifier;
-      const derivedChallenge = this.generateCodeChallenge(codeVerifier);
-
-      if (pkceOptions.codeChallenge && pkceOptions.codeChallenge !== derivedChallenge) {
-        throw new Error('Provided PKCE code challenge does not match the code verifier');
-      }
-
-      codeChallenge = pkceOptions.codeChallenge ?? derivedChallenge;
-      codeChallengeMethod = pkceOptions.codeChallengeMethod ?? 'S256';
-    } else {
-      // For ChatGPT compatibility, only use PKCE when explicitly provided
-      // Don't auto-generate PKCE for legacy flows
-      codeVerifier = pkceOptions?.codeVerifier;
-      codeChallenge = codeVerifier ? pkceOptions?.codeChallenge : undefined;
-      codeChallengeMethod = codeVerifier ? pkceOptions?.codeChallengeMethod : undefined;
+    const derivedChallenge = this.generateCodeChallenge(codeVerifier);
+    if (pkceOptions?.codeChallenge && pkceOptions.codeChallenge !== derivedChallenge) {
+      throw new Error('Provided PKCE code challenge does not match the code verifier');
     }
+
+    const codeChallenge = pkceOptions?.codeChallenge ?? derivedChallenge;
+    const codeChallengeMethod = pkceOptions?.codeChallengeMethod ?? 'S256';
     const state = this.generateSecureState();
 
     // Use dynamic redirect URI if provided, otherwise fall back to config
-    const finalRedirectUri = redirectUri || this.config.redirectUri;
+    const finalRedirectUri = this.resolveRedirectUri(redirectUri);
+
 
     // Create OAuth state
     const oauthState: OAuthState = {
@@ -142,6 +146,16 @@ export class OAuthSystem {
 
     // Remove used state
     this.states.delete(state);
+
+    if (oauthState.expiresAt.getTime() <= Date.now()) {
+      return {
+        success: false,
+        error: {
+          type: 'invalid_state',
+          message: 'Invalid or expired OAuth state',
+        },
+      };
+    }
 
     // Check for OAuth errors
     if (error) {
@@ -334,6 +348,7 @@ export class OAuthSystem {
   private initializeProviders(): void {
     // GitHub provider
     if (this.config.providers.github) {
+      this.validateGitHubProviderConfig(this.config.providers.github);
       const githubProvider = new GitHubOAuthProvider({
         clientId: this.config.providers.github.clientId,
         clientSecret: this.config.providers.github.clientSecret,
@@ -347,6 +362,7 @@ export class OAuthSystem {
 
     // Google provider
     if (this.config.providers.google) {
+      this.validateGoogleProviderConfig(this.config.providers.google);
       const googleProvider = new GoogleOAuthProvider({
         clientId: this.config.providers.google.clientId,
         clientSecret: this.config.providers.google.clientSecret,
@@ -360,11 +376,37 @@ export class OAuthSystem {
     }
   }
 
+  private validateGitHubProviderConfig(
+    config: NonNullable<OAuthSystemConfig['providers']['github']>,
+  ): void {
+    if (!config.clientId || !config.clientId.trim()) {
+      throw new Error('GitHub client ID is required');
+    }
+    if (!config.clientSecret || !config.clientSecret.trim()) {
+      throw new Error('GitHub client secret is required');
+    }
+  }
+
+  private validateGoogleProviderConfig(
+    config: NonNullable<OAuthSystemConfig['providers']['google']>,
+  ): void {
+    if (!config.clientId || !config.clientId.trim()) {
+      throw new Error('Google client ID is required');
+    }
+    if (!config.clientSecret || !config.clientSecret.trim()) {
+      throw new Error('Google client secret is required');
+    }
+  }
+
   /**
    * Generate secure random state
    */
   private generateSecureState(): string {
     return crypto.randomBytes(32).toString('base64url');
+  }
+
+  private generateCodeVerifier(): string {
+    return crypto.randomBytes(64).toString('base64url');
   }
 
   /**

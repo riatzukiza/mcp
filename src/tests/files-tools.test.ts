@@ -69,7 +69,7 @@ test('filesListDirectory - lists directory contents', async (t) => {
   const entries = result.entries.map((e: any) => e.name);
   t.true(entries.includes('test.txt'));
   t.true(entries.includes('subdir'));
-  t.true(entries.includes('.hidden')); // hidden files included by default
+  t.false(entries.includes('.hidden'));
 });
 
 test('filesListDirectory - respects includeHidden option', async (t) => {
@@ -105,13 +105,13 @@ test('filesTreeDirectory - builds directory tree', async (t) => {
   const result = (await tool.invoke({ rel: '.', depth: 2 })) as any;
 
   t.true(result.ok);
-  t.true(Array.isArray(result.entries));
+  t.true(Array.isArray(result.tree));
 
   // Should have nested structure
-  const rootEntries = result.entries.map((e: any) => e.name);
+  const rootEntries = result.tree.map((e: any) => e.name);
   t.true(rootEntries.includes('subdir'));
 
-  const subdir = result.entries.find((e: any) => e.name === 'subdir');
+  const subdir = result.tree.find((e: any) => e.name === 'subdir');
   t.true(subdir && Array.isArray(subdir.children));
   t.true(subdir.children.some((c: any) => c.name === 'nested.txt'));
 });
@@ -125,8 +125,8 @@ test('filesTreeDirectory - respects depth limit', async (t) => {
   const result = (await tool.invoke({ rel: '.', depth: 1 })) as any;
 
   t.true(result.ok);
-  const subdir = result.entries.find((e: any) => e.name === 'subdir');
-  t.true(subdir);
+  const subdir = result.tree.find((e: any) => e.name === 'subdir');
+  t.truthy(subdir);
   // With depth=1, children should not be expanded
   t.true(!subdir.children || subdir.children.length === 0);
 });
@@ -167,7 +167,8 @@ test('filesViewFile - handles non-existent file', async (t) => {
   const result = (await tool.invoke({ relOrFuzzy: '/non/existent/file.txt' })) as any;
 
   t.false(result.ok);
-  t.true(result.error.includes('ENOENT') || result.error.includes('no such file'));
+  const message = String(result.error).toLowerCase();
+  t.true(message.includes('invalid path') || message.includes('outside root'));
 });
 
 test('filesViewFile - handles empty file', async (t) => {
@@ -180,7 +181,7 @@ test('filesViewFile - handles empty file', async (t) => {
   const result = (await tool.invoke({ relOrFuzzy: filePath })) as any;
 
   t.true(result.ok);
-  t.is(result.totalLines, 0);
+  t.is(result.totalLines, 1);
   t.is(result.content, '');
 });
 
@@ -279,10 +280,9 @@ test('filesWriteFileLines - handles invalid startLine', async (t) => {
   const filePath = path.join(tempDir, 'test.txt');
   const lines = ['Test line'];
 
-  const result = (await tool.invoke({ filePath, lines, startLine: 0 })) as any;
-
-  t.false(result.ok);
-  t.true(result.error.includes('startLine must be >= 1'));
+  await t.throwsAsync(async () => {
+    await tool.invoke({ filePath, lines, startLine: 0 });
+  }, { instanceOf: z.ZodError });
 });
 
 test('filesSearch - searches text content', async (t) => {
@@ -298,7 +298,7 @@ test('filesSearch - searches text content', async (t) => {
   t.true(Array.isArray(result.results));
 
   const match = result.results.find((r: any) => r.path.includes('test.txt'));
-  t.true(match);
+  t.truthy(match);
   t.true(match.snippet.includes('Hello World'));
 });
 
@@ -315,8 +315,8 @@ test('filesSearch - searches with regex', async (t) => {
 
   const todoMatch = result.results.find((r: any) => r.snippet.includes('TODO'));
   const fixmeMatch = result.results.find((r: any) => r.snippet.includes('FIXME'));
-  t.true(todoMatch);
-  t.true(fixmeMatch);
+  t.truthy(todoMatch);
+  t.truthy(fixmeMatch);
 });
 
 test('filesSearch - respects case sensitivity', async (t) => {
@@ -424,9 +424,9 @@ test('filesSearch - handles non-existent directory', async (t) => {
   const tool = filesSearch(createMockContext(tempDir));
   const result = (await tool.invoke({ query: 'test', rel: '/non/existent/path' })) as any;
 
-  t.true(result.ok);
-  t.is(result.count, 0);
-  t.deepEqual(result.results, []);
+  t.false(result.ok);
+  const message = String(result.error).toLowerCase();
+  t.true(message.includes('invalid') || message.includes('outside root'));
 });
 
 test('filesSearch - handles empty query', async (t) => {

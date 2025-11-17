@@ -71,6 +71,11 @@ export interface AuthConfig {
     redirectUri: string;
 
     /**
+     * Additional allowed redirect URIs
+     */
+    redirectAllowlist?: readonly string[];
+
+    /**
      * Trusted OAuth providers
      */
     trustedProviders: readonly string[];
@@ -189,6 +194,7 @@ export const defaultAuthConfig: AuthConfig = {
   oauth: {
     enabled: false, // Disabled by default for security
     redirectUri: 'http://localhost:3000/auth/oauth/callback',
+    redirectAllowlist: ['http://localhost:3000/auth/oauth/callback'],
     trustedProviders: ['github', 'google'],
     autoCreateUsers: true,
     defaultRole: 'user',
@@ -259,6 +265,14 @@ export function getAuthConfig(): AuthConfig {
   if (config.oauth) {
     config.oauth.enabled = process.env.OAUTH_ENABLED === 'true';
     config.oauth.redirectUri = process.env.OAUTH_REDIRECT_URI || config.oauth.redirectUri;
+    const redirectAllowlistEnv = process.env.OAUTH_REDIRECT_ALLOWLIST;
+    const parsedAllowlist = redirectAllowlistEnv
+      ? redirectAllowlistEnv.split(',').map((uri) => uri.trim()).filter((uri) => uri.length > 0)
+      : [];
+    const existingAllowlist = config.oauth.redirectAllowlist ?? [];
+    config.oauth.redirectAllowlist = Array.from(
+      new Set([config.oauth.redirectUri, ...existingAllowlist, ...parsedAllowlist]),
+    );
     config.oauth.autoCreateUsers = process.env.OAUTH_AUTO_CREATE_USERS !== 'false';
     config.oauth.defaultRole = (process.env.OAUTH_DEFAULT_ROLE as any) || config.oauth.defaultRole;
     config.oauth.enableUserSync = process.env.OAUTH_ENABLE_USER_SYNC !== 'false';

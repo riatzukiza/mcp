@@ -176,7 +176,7 @@ test('User registry CRUD operations', async (t) => {
   t.is(retrievedSession!.sessionId, session.sessionId);
 
   // Get user sessions
-  const userSessions = system.userRegistry!.getUserSessions(user.id);
+  const userSessions = await system.userRegistry!.getUserSessions(user.id);
   t.is(userSessions.length, 1);
   t.truthy(userSessions[0]);
   t.is(userSessions[0]!.sessionId, session.sessionId);

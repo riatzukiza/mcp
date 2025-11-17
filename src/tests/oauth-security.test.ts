@@ -7,7 +7,7 @@
 
 import test from 'ava';
 import { OAuthSystem } from '../auth/oauth/index.js';
-import type { OAuthSystemConfig } from '../auth/oauth/types.js';
+import type { OAuthSystemConfig, OAuthSession } from '../auth/oauth/types.js';
 
 // Test configuration with security settings
 const createSecureOAuthConfig = (): OAuthSystemConfig => ({
@@ -20,6 +20,7 @@ const createSecureOAuthConfig = (): OAuthSystemConfig => ({
     },
   },
   redirectUri: 'https://localhost:3000/auth/callback',
+  redirectAllowlist: ['https://localhost:3000/auth/callback'],
   stateTimeout: 600, // 10 minutes
   sessionTimeout: 3600, // 1 hour
   tokenRefreshThreshold: 300, // 5 minutes
@@ -84,8 +85,16 @@ test('OAuth sessions should expire after timeout', async (t) => {
 
   // Manually create a session (simulating successful OAuth)
   const sessionId = 'test-session-id';
-  // Note: In actual implementation, sessions are created internally
-  // This test will be updated after implementation
+  const sessionData: OAuthSession = {
+    sessionId,
+    userId: 'user-123',
+    provider: 'github',
+    accessToken: 'test-token',
+    createdAt: new Date(),
+    lastAccessAt: new Date(),
+    metadata: {},
+  };
+  (oauthSystem as any).sessions.set(sessionId, sessionData);
 
   // Access session immediately
   const session = oauthSystem.getSession(sessionId);

@@ -165,6 +165,7 @@ export type OAuthProviderConfig = Readonly<{
 export type OAuthSystemConfig = Readonly<{
   readonly providers: OAuthProviderConfig;
   readonly redirectUri: string;
+  readonly redirectAllowlist?: readonly string[];
   readonly stateTimeout: number; // seconds
   readonly sessionTimeout: number; // seconds
   readonly tokenRefreshThreshold: number; // seconds before expiry to refresh

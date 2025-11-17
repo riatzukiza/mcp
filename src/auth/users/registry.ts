@@ -36,6 +36,7 @@ export class UserRegistry {
   private readonly rolesPath: string;
   private readonly sessionsPath: string;
   private readonly activityPath: string;
+  private readonly ready: Promise<void>;
 
   // In-memory caches
   private users = new Map<string, User>();
@@ -57,7 +58,11 @@ export class UserRegistry {
     this.activityPath = path.join(config.storagePath, 'activity.json');
 
     // Initialize storage
-    this.initializeStorage();
+    this.ready = this.initializeStorage();
+  }
+
+  private async ensureReady(): Promise<void> {
+    await this.ready;
   }
 
   /**
@@ -202,6 +207,7 @@ export class UserRegistry {
    * Create a new user
    */
   async createUser(request: CreateUserRequest): Promise<User> {
+    await this.ensureReady();
     const userId = crypto.randomUUID();
     const now = new Date();
 
@@ -263,6 +269,7 @@ export class UserRegistry {
    * Get user by ID
    */
   async getUser(userId: string): Promise<User | null> {
+    await this.ensureReady();
     return this.users.get(userId) || null;
   }
 
@@ -270,6 +277,7 @@ export class UserRegistry {
    * Get user by email
    */
   async getUserByEmail(email: string): Promise<User | null> {
+    await this.ensureReady();
     const userId = this.emailIndex.get(email.toLowerCase());
     return userId ? this.users.get(userId) || null : null;
   }
@@ -278,6 +286,7 @@ export class UserRegistry {
    * Get user by provider ID
    */
   async getUserByProvider(provider: string, providerUserId: string): Promise<User | null> {
+    await this.ensureReady();
     const userId = this.providerIndex.get(`${provider}:${providerUserId}`);
     return userId ? this.users.get(userId) || null : null;
   }
@@ -286,6 +295,7 @@ export class UserRegistry {
    * Update user
    */
   async updateUser(userId: string, request: UpdateUserRequest): Promise<User> {
+    await this.ensureReady();
     const existingUser = this.users.get(userId);
     if (!existingUser) {
       throw new Error(`User not found: ${userId}`);
@@ -326,6 +336,7 @@ export class UserRegistry {
    * Delete user
    */
   async deleteUser(userId: string): Promise<boolean> {
+    await this.ensureReady();
     const user = this.users.get(userId);
     if (!user) {
       return false;
@@ -343,7 +354,7 @@ export class UserRegistry {
     }
 
     // Revoke all sessions
-    const userSessions = this.getUserSessions(userId);
+    const userSessions = await this.getUserSessions(userId);
     for (const session of userSessions) {
       this.sessions.delete(session.sessionId);
     }
@@ -362,6 +373,7 @@ export class UserRegistry {
     page: number = 1,
     pageSize: number = 50,
   ): Promise<UserSearchResult> {
+    await this.ensureReady();
     let filteredUsers = Array.from(this.users.values());
 
     // Apply filters
@@ -434,6 +446,7 @@ export class UserRegistry {
    * List all users (for admin purposes)
    */
   async listUsers(): Promise<readonly User[]> {
+    await this.ensureReady();
     return Array.from(this.users.values());
   }
 
@@ -441,6 +454,7 @@ export class UserRegistry {
    * Create custom role
    */
   async createCustomRole(request: CreateCustomRoleRequest): Promise<CustomRole> {
+    await this.ensureReady();
     const roleId = crypto.randomUUID();
     const now = new Date();
 
@@ -465,6 +479,7 @@ export class UserRegistry {
    * Get custom role
    */
   async getCustomRole(roleId: string): Promise<CustomRole | null> {
+    await this.ensureReady();
     return this.customRoles.get(roleId) || null;
   }
 
@@ -472,6 +487,7 @@ export class UserRegistry {
    * List custom roles
    */
   async listCustomRoles(): Promise<readonly CustomRole[]> {
+    await this.ensureReady();
     return Array.from(this.customRoles.values());
   }
 
@@ -479,6 +495,7 @@ export class UserRegistry {
    * Delete custom role
    */
   async deleteCustomRole(roleId: string): Promise<boolean> {
+    await this.ensureReady();
     const deleted = this.customRoles.delete(roleId);
     if (deleted) {
       await this.saveData();
@@ -496,12 +513,13 @@ export class UserRegistry {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<UserSession> {
+    await this.ensureReady();
     const sessionId = crypto.randomUUID();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + this.config.sessionTimeout * 1000);
 
     // Check session limit
-    const userSessions = this.getUserSessions(userId);
+    const userSessions = await this.getUserSessions(userId);
     if (userSessions.length >= this.config.maxSessionsPerUser) {
       // Remove oldest session
       const oldestSession = userSessions[0];
@@ -534,6 +552,7 @@ export class UserRegistry {
    * Get session
    */
   async getSession(sessionId: string): Promise<UserSession | null> {
+    await this.ensureReady();
     const session = this.sessions.get(sessionId);
     if (!session) {
       return null;
@@ -558,7 +577,8 @@ export class UserRegistry {
   /**
    * Get user sessions
    */
-  getUserSessions(userId: string): readonly UserSession[] {
+  async getUserSessions(userId: string): Promise<readonly UserSession[]> {
+    await this.ensureReady();
     return Array.from(this.sessions.values())
       .filter((session) => session.userId === userId)
       .filter((session) => Date.now() < session.expiresAt.getTime())
@@ -569,6 +589,7 @@ export class UserRegistry {
    * Revoke session
    */
   async revokeSession(sessionId: string): Promise<boolean> {
+    await this.ensureReady();
     const session = this.sessions.get(sessionId);
     if (!session) {
       return false;
@@ -585,7 +606,8 @@ export class UserRegistry {
    * Revoke all user sessions
    */
   async revokeUserSessions(userId: string): Promise<number> {
-    const userSessions = this.getUserSessions(userId);
+    await this.ensureReady();
+    const userSessions = await this.getUserSessions(userId);
     let revokedCount = 0;
 
     for (const session of userSessions) {
@@ -606,6 +628,7 @@ export class UserRegistry {
    * Update user last login
    */
   async updateLastLogin(userId: string): Promise<void> {
+    await this.ensureReady();
     const user = this.users.get(userId);
     if (user) {
       const updatedUser: User = {
@@ -623,6 +646,7 @@ export class UserRegistry {
    * Get user statistics
    */
   async getUserStats(): Promise<UserStats> {
+    await this.ensureReady();
     const users = Array.from(this.users.values());
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -694,6 +718,7 @@ export class UserRegistry {
     userId: string,
     limit: number = 100,
   ): Promise<readonly UserActivityLog[]> {
+    await this.ensureReady();
     return this.activityLogs
       .filter((log) => log.userId === userId)
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
@@ -704,6 +729,7 @@ export class UserRegistry {
    * Cleanup expired sessions
    */
   async cleanupExpiredSessions(): Promise<number> {
+    await this.ensureReady();
     const now = Date.now();
     let cleanedCount = 0;
 
@@ -724,12 +750,13 @@ export class UserRegistry {
   /**
    * Get registry statistics
    */
-  getRegistryStats(): {
+  async getRegistryStats(): Promise<{
     totalUsers: number;
     totalSessions: number;
     totalCustomRoles: number;
     totalActivityLogs: number;
-  } {
+  }> {
+    await this.ensureReady();
     return {
       totalUsers: this.users.size,
       totalSessions: this.sessions.size,

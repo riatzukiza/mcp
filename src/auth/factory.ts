@@ -139,9 +139,14 @@ export class AuthenticationFactory {
       };
     }
 
+    const redirectAllowlist = Array.from(
+      new Set([config.redirectUri, ...(config.redirectAllowlist ?? [])]),
+    );
+
     return {
       providers,
       redirectUri: config.redirectUri,
+      redirectAllowlist,
       stateTimeout: 600, // 10 minutes
       sessionTimeout: 3600, // 1 hour
       tokenRefreshThreshold: 300, // 5 minutes

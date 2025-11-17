@@ -57,9 +57,13 @@ export const resolvePath = async (
   try {
     const absCandidate = normalizeToRoot(ROOT_PATH, validationResult.sanitizedPath!);
     if (!isInsideRoot(ROOT_PATH, absCandidate)) return null;
+    await validatePathSecurity(ROOT_PATH, absCandidate);
     const st = await fs.stat(absCandidate);
     if (st.isFile()) return absCandidate;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.toLowerCase().includes('symlink')) {
+      throw error;
+    }
     return null;
   }
   return null;

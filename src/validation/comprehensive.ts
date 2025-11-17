@@ -14,6 +14,7 @@ import { z } from 'zod';
 // ============================================================================
 
 const DANGEROUS_CHARS = ['<', '>', '|', ';', '`', '$', '"', "'", '\r', '\n'];
+const DANGEROUS_SEQUENCES = ['&&'];
 const WINDOWS_RESERVED_NAMES = [
   'CON',
   'PRN',
@@ -171,7 +172,10 @@ function detectPathTraversal(trimmed: string): {
  * Checks for dangerous characters
  */
 function containsDangerousCharacters(trimmed: string): boolean {
-  return DANGEROUS_CHARS.some((char) => trimmed.includes(char));
+  if (DANGEROUS_CHARS.some((char) => trimmed.includes(char))) {
+    return true;
+  }
+  return DANGEROUS_SEQUENCES.some((sequence) => trimmed.includes(sequence));
 }
 
 /**

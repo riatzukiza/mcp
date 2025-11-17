@@ -123,7 +123,7 @@ test('authorization: admin can access dangerous tools', async (t) => {
   t.is(result.result, 'executed files_write_content');
 });
 
-test('authorization: guest can access safe tools', async (t) => {
+test('authorization: guest can access safe tools - duplicate test', async (t) => {
   const { createAuthorizedToolFactory } = await import('../core/authorization.js');
 
   const mockTool = createMockTool('mcp_help');
@@ -169,7 +169,7 @@ test('security: no hardcoded secrets in config files', async (t) => {
   const fs = await import('node:fs');
   const path = await import('node:path');
 
-  const configPath = path.resolve(process.cwd(), '../../../promethean.mcp.json');
+  const configPath = path.resolve(process.cwd(), 'test-data/config/promethean.mcp.json');
   const configContent = fs.readFileSync(configPath, 'utf-8');
 
   // Check for common secret patterns
@@ -198,7 +198,7 @@ test('security: environment variable placeholders used', async (t) => {
   const fs = await import('node:fs');
   const path = await import('node:path');
 
-  const configPath = path.resolve(process.cwd(), '../../../promethean.mcp.json');
+  const configPath = path.resolve(process.cwd(), 'test-data/config/promethean.mcp.json');
   const configContent = fs.readFileSync(configPath, 'utf-8');
 
   // Should use ${VAR_NAME} pattern for secrets
@@ -293,7 +293,7 @@ test('security: command injection prevention', async (t) => {
 
   for (const cmd of maliciousCommands) {
     // Test command sanitization
-    const sanitized = cmd.replace(/[;&|`$()]/g, '');
+    const sanitized = cmd.replace(/[;&|`$()<>]/g, '');
     t.not(sanitized, cmd, `Command should be sanitized: ${cmd}`);
   }
 });

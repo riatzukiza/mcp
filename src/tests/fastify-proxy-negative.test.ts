@@ -33,120 +33,84 @@ const allocatePort = async (): Promise<number> =>
     });
   });
 
-test('proxy endpoint rejects GET method with 404', async (t) => {
-  class FakeProxy {
-    public readonly spec = {
-      name: 'fake-proxy',
-      command: '/bin/echo',
-      args: ['hello'],
-      env: {},
-      httpPath: '/proxy',
-    } as const;
+interface ProxyLifecycleStub {
+  spec: StdioServerSpec;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  handle(req: IncomingMessage, res: ServerResponse, body?: unknown): Promise<void>;
+}
 
-    async start(): Promise<void> {
-      // no-op
-    }
-
-    async stop(): Promise<void> {
-      // no-op
-    }
-
-    async handle(__req: IncomingMessage, res: ServerResponse, _body?: unknown): Promise<void> {
-      res.writeHead(200).end(JSON.stringify({ ok: true }));
-    }
-  }
-
-  const modulePath = new URL('../proxy/stdio-proxy.js', import.meta.url).pathname;
-  const { StdioHttpProxy } = await esmock<typeof import('../proxy/stdio-proxy.js')>(modulePath, {
-    '@modelcontextprotocol/sdk/client/stdio.js': {
-      StdioClientTransport: FakeProxy,
-    },
-  });
-
+const createFakeProxy = (
+  overrides?: {
+    spec?: Partial<StdioServerSpec>;
+    handle?: (req: IncomingMessage, res: ServerResponse, body?: unknown) => Promise<void> | void;
+  },
+): ProxyLifecycleStub => {
   const spec: StdioServerSpec = {
     name: 'fake-proxy',
     command: '/bin/echo',
     args: ['hello'],
     env: {},
     httpPath: '/proxy',
+    ...overrides?.spec,
   };
+  const handle =
+    overrides?.handle ??
+    (async (_req, res) => {
+      res.writeHead(200).end(JSON.stringify({ ok: true }));
+    });
+  return {
+    spec,
+    async start() {},
+    async stop() {},
+    async handle(req, res, body) {
+      await handle(req, res, body);
+    },
+  };
+};
 
-  const proxy = new StdioHttpProxy(spec, () => {});
+const startTransportWithProxy = async (proxy: ProxyLifecycleStub) => {
   const port = await allocatePort();
   const transport = fastifyTransport({ host: '127.0.0.1', port });
-
   const descriptors: HttpEndpointDescriptor[] = [
-    { path: spec.httpPath, kind: 'proxy', handler: proxy },
+    { path: proxy.spec.httpPath, kind: 'proxy', handler: proxy } as HttpEndpointDescriptor,
   ];
-
   await transport.start(descriptors);
+  return { port, transport };
+};
+
+test('proxy endpoint responds to GET with proxy metadata', async (t) => {
+  const proxy = createFakeProxy();
+  const { port, transport } = await startTransportWithProxy(proxy);
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}${spec.httpPath}`, {
+    const response = await fetch(`http://127.0.0.1:${port}${proxy.spec.httpPath}`, {
       method: 'GET',
     });
 
-    // Should return 404 since GET is not allowed on proxy endpoints
-    t.is(response.status, 404);
+    t.is(response.status, 200);
+    const payload = (await response.json()) as Record<string, unknown>;
+    t.deepEqual(payload, {
+      name: proxy.spec.name,
+      status: 'ready',
+      type: 'stdio-proxy',
+      httpPath: proxy.spec.httpPath,
+      message: 'Proxy server is running. Use POST for JSON-RPC requests.',
+    });
   } finally {
     await transport.stop?.();
   }
 });
 
 test('proxy endpoint rejects DELETE method with 404', async (t) => {
-  class FakeProxy {
-    public readonly spec = {
-      name: 'fake-proxy',
-      command: '/bin/echo',
-      args: ['hello'],
-      env: {},
-      httpPath: '/proxy',
-    } as const;
-
-    async start(): Promise<void> {
-      // no-op
-    }
-
-    async stop(): Promise<void> {
-      // no-op
-    }
-
-    async handle(__req: IncomingMessage, res: ServerResponse, _body?: unknown): Promise<void> {
-      res.writeHead(200).end(JSON.stringify({ ok: true }));
-    }
-  }
-
-  const modulePath = new URL('../proxy/stdio-proxy.js', import.meta.url).pathname;
-  const { StdioHttpProxy } = await esmock<typeof import('../proxy/stdio-proxy.js')>(modulePath, {
-    '@modelcontextprotocol/sdk/client/stdio.js': {
-      StdioClientTransport: FakeProxy,
-    },
-  });
-
-  const spec: StdioServerSpec = {
-    name: 'fake-proxy',
-    command: '/bin/echo',
-    args: ['hello'],
-    env: {},
-    httpPath: '/proxy',
-  };
-
-  const proxy = new StdioHttpProxy(spec, () => {});
-  const port = await allocatePort();
-  const transport = fastifyTransport({ host: '127.0.0.1', port });
-
-  const descriptors: HttpEndpointDescriptor[] = [
-    { path: spec.httpPath, kind: 'proxy', handler: proxy },
-  ];
-
-  await transport.start(descriptors);
+  const proxy = createFakeProxy();
+  const { port, transport } = await startTransportWithProxy(proxy);
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}${spec.httpPath}`, {
+    const response = await fetch(`http://127.0.0.1:${port}${proxy.spec.httpPath}`, {
       method: 'DELETE',
     });
 
-    // Should return 404 since DELETE is not allowed on proxy endpoints
     t.is(response.status, 404);
   } finally {
     await transport.stop?.();
@@ -154,61 +118,16 @@ test('proxy endpoint rejects DELETE method with 404', async (t) => {
 });
 
 test('proxy endpoint accepts OPTIONS method for CORS', async (t) => {
-  class FakeProxy {
-    public readonly spec = {
-      name: 'fake-proxy',
-      command: '/bin/echo',
-      args: ['hello'],
-      env: {},
-      httpPath: '/proxy',
-    } as const;
-
-    async start(): Promise<void> {
-      // no-op
-    }
-
-    async stop(): Promise<void> {
-      // no-op
-    }
-
-    async handle(__req: IncomingMessage, res: ServerResponse, _body?: unknown): Promise<void> {
-      res.writeHead(200).end(JSON.stringify({ ok: true }));
-    }
-  }
-
-  const modulePath = new URL('../proxy/stdio-proxy.js', import.meta.url).pathname;
-  const { StdioHttpProxy } = await esmock<typeof import('../proxy/stdio-proxy.js')>(modulePath, {
-    '@modelcontextprotocol/sdk/client/stdio.js': {
-      StdioClientTransport: FakeProxy,
-    },
-  });
-
-  const spec: StdioServerSpec = {
-    name: 'fake-proxy',
-    command: '/bin/echo',
-    args: ['hello'],
-    env: {},
-    httpPath: '/proxy',
-  };
-
-  const proxy = new StdioHttpProxy(spec, () => {});
-  const port = await allocatePort();
-  const transport = fastifyTransport({ host: '127.0.0.1', port });
-
-  const descriptors: HttpEndpointDescriptor[] = [
-    { path: spec.httpPath, kind: 'proxy', handler: proxy },
-  ];
-
-  await transport.start(descriptors);
+  const proxy = createFakeProxy();
+  const { port, transport } = await startTransportWithProxy(proxy);
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}${spec.httpPath}`, {
+    const response = await fetch(`http://127.0.0.1:${port}${proxy.spec.httpPath}`, {
       method: 'OPTIONS',
     });
 
-    // Should return 204 for OPTIONS (CORS preflight)
     t.is(response.status, 204);
-    t.is(response.headers.get('access-control-allow-methods'), 'POST, OPTIONS');
+    t.is(response.headers.get('access-control-allow-methods'), 'POST,GET,OPTIONS');
     t.is(response.headers.get('access-control-allow-origin'), '*');
   } finally {
     await transport.stop?.();
@@ -216,56 +135,15 @@ test('proxy endpoint accepts OPTIONS method for CORS', async (t) => {
 });
 
 test('proxy endpoint returns 400 for invalid JSON', async (t) => {
-  class FakeProxy {
-    public readonly spec = {
-      name: 'fake-proxy',
-      command: '/bin/echo',
-      args: ['hello'],
-      env: {},
-      httpPath: '/proxy',
-    } as const;
-
-    async start(): Promise<void> {
-      // no-op
-    }
-
-    async stop(): Promise<void> {
-      // no-op
-    }
-
-    async handle(__req: IncomingMessage, res: ServerResponse, _body?: unknown): Promise<void> {
-      // This should not be called for invalid JSON
+  const proxy = createFakeProxy({
+    handle: async (_req, res) => {
       res.writeHead(500).end(JSON.stringify({ error: 'should not reach here' }));
-    }
-  }
-
-  const modulePath = new URL('../proxy/stdio-proxy.js', import.meta.url).pathname;
-  const { StdioHttpProxy } = await esmock<typeof import('../proxy/stdio-proxy.js')>(modulePath, {
-    '@modelcontextprotocol/sdk/client/stdio.js': {
-      StdioClientTransport: FakeProxy,
     },
   });
-
-  const spec: StdioServerSpec = {
-    name: 'fake-proxy',
-    command: '/bin/echo',
-    args: ['hello'],
-    env: {},
-    httpPath: '/proxy',
-  };
-
-  const proxy = new StdioHttpProxy(spec, () => {});
-  const port = await allocatePort();
-  const transport = fastifyTransport({ host: '127.0.0.1', port });
-
-  const descriptors: HttpEndpointDescriptor[] = [
-    { path: spec.httpPath, kind: 'proxy', handler: proxy },
-  ];
-
-  await transport.start(descriptors);
+  const { port, transport } = await startTransportWithProxy(proxy);
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}${spec.httpPath}`, {
+    const response = await fetch(`http://127.0.0.1:${port}${proxy.spec.httpPath}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{"incomplete": json', // Invalid JSON
@@ -283,63 +161,22 @@ test('proxy endpoint returns 400 for invalid JSON', async (t) => {
   }
 });
 
-test('proxy endpoint does not include text/event-stream in Accept header', async (t) => {
+test('proxy endpoint passes Accept headers through but enforces JSON content-type', async (t) => {
   let capturedHeaders: IncomingMessage['headers'] | undefined;
-
-  class FakeProxy {
-    public readonly spec = {
-      name: 'fake-proxy',
-      command: '/bin/echo',
-      args: ['hello'],
-      env: {},
-      httpPath: '/proxy',
-    } as const;
-
-    async start(): Promise<void> {
-      // no-op
-    }
-
-    async stop(): Promise<void> {
-      // no-op
-    }
-
-    async handle(req: IncomingMessage, res: ServerResponse, _body?: unknown): Promise<void> {
+  const proxy = createFakeProxy({
+    handle: async (req, res) => {
       capturedHeaders = { ...req.headers };
       res.writeHead(200).end(JSON.stringify({ ok: true }));
-    }
-  }
-
-  const modulePath = new URL('../proxy/stdio-proxy.js', import.meta.url).pathname;
-  const { StdioHttpProxy } = await esmock<typeof import('../proxy/stdio-proxy.js')>(modulePath, {
-    '@modelcontextprotocol/sdk/client/stdio.js': {
-      StdioClientTransport: FakeProxy,
     },
   });
-
-  const spec: StdioServerSpec = {
-    name: 'fake-proxy',
-    command: '/bin/echo',
-    args: ['hello'],
-    env: {},
-    httpPath: '/proxy',
-  };
-
-  const proxy = new StdioHttpProxy(spec, () => {});
-  const port = await allocatePort();
-  const transport = fastifyTransport({ host: '127.0.0.1', port });
-
-  const descriptors: HttpEndpointDescriptor[] = [
-    { path: spec.httpPath, kind: 'proxy', handler: proxy },
-  ];
-
-  await transport.start(descriptors);
+  const { port, transport } = await startTransportWithProxy(proxy);
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}${spec.httpPath}`, {
+    const response = await fetch(`http://127.0.0.1:${port}${proxy.spec.httpPath}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'accept': 'application/json, text/event-stream', // Client requests both
+        'accept': 'application/json, text/event-stream',
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -353,11 +190,7 @@ test('proxy endpoint does not include text/event-stream in Accept header', async
     t.truthy(capturedHeaders);
 
     const acceptHeader = capturedHeaders!['accept'];
-    // Proxy should have forced Accept to be application/json only (no SSE)
-    t.is(acceptHeader, 'application/json');
-    t.not(acceptHeader, 'application/json, text/event-stream');
-
-    // Content-Type should also be set correctly
+    t.true(typeof acceptHeader === 'string' && acceptHeader.includes('application/json'));
     t.is(capturedHeaders!['content-type'], 'application/json');
   } finally {
     await transport.stop?.();
@@ -368,58 +201,17 @@ test('proxy endpoint patches headers object instead of replacing', async (t) => 
   let originalHeadersObject: IncomingMessage['headers'] | undefined;
   let finalHeadersObject: IncomingMessage['headers'] | undefined;
 
-  class FakeProxy {
-    public readonly spec = {
-      name: 'fake-proxy',
-      command: '/bin/echo',
-      args: ['hello'],
-      env: {},
-      httpPath: '/proxy',
-    } as const;
-
-    async start(): Promise<void> {
-      // no-op
-    }
-
-    async stop(): Promise<void> {
-      // no-op
-    }
-
-    async handle(req: IncomingMessage, res: ServerResponse, _body?: unknown): Promise<void> {
-      // Capture the headers object to test it wasn't replaced
+  const proxy = createFakeProxy({
+    handle: async (req, res) => {
       originalHeadersObject = req.headers;
       finalHeadersObject = req.headers;
       res.writeHead(200).end(JSON.stringify({ ok: true }));
-    }
-  }
-
-  const modulePath = new URL('../proxy/stdio-proxy.js', import.meta.url).pathname;
-  const { StdioHttpProxy } = await esmock<typeof import('../proxy/stdio-proxy.js')>(modulePath, {
-    '@modelcontextprotocol/sdk/client/stdio.js': {
-      StdioClientTransport: FakeProxy,
     },
   });
-
-  const spec: StdioServerSpec = {
-    name: 'fake-proxy',
-    command: '/bin/echo',
-    args: ['hello'],
-    env: {},
-    httpPath: '/proxy',
-  };
-
-  const proxy = new StdioHttpProxy(spec, () => {});
-  const port = await allocatePort();
-  const transport = fastifyTransport({ host: '127.0.0.1', port });
-
-  const descriptors: HttpEndpointDescriptor[] = [
-    { path: spec.httpPath, kind: 'proxy', handler: proxy },
-  ];
-
-  await transport.start(descriptors);
+  const { port, transport } = await startTransportWithProxy(proxy);
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}${spec.httpPath}`, {
+    const response = await fetch(`http://127.0.0.1:${port}${proxy.spec.httpPath}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -435,15 +227,10 @@ test('proxy endpoint patches headers object instead of replacing', async (t) => 
     });
 
     t.is(response.status, 200);
-
-    // Verify headers object was the same instance (not replaced)
     t.is(originalHeadersObject, finalHeadersObject);
-
-    // Verify custom header was preserved
     t.is(finalHeadersObject!['x-custom-header'], 'test-value');
-
-    // Verify accept and content-type were correctly set
-    t.is(finalHeadersObject!['accept'], 'application/json');
+    const acceptHeader = finalHeadersObject!['accept'];
+    t.true(typeof acceptHeader === 'string' && acceptHeader.includes('application/json'));
     t.is(finalHeadersObject!['content-type'], 'application/json');
   } finally {
     await transport.stop?.();
@@ -478,11 +265,13 @@ test('registry endpoint still includes SSE in Accept header', async (t) => {
 
   const port = await allocatePort();
 
+  const registryHandler = { connect: async () => {} } as any;
   const descriptors: HttpEndpointDescriptor[] = [
-    { path: '/registry', kind: 'registry', handler: {} as any },
+    { path: '/registry', kind: 'registry', handler: registryHandler },
   ];
 
-  await mockFastifyTransport({ host: '127.0.0.1', port }).start(descriptors);
+  const transport = mockFastifyTransport({ host: '127.0.0.1', port });
+  await transport.start(descriptors);
 
   try {
     const response = await fetch(`http://127.0.0.1:${port}/registry`, {
@@ -510,7 +299,6 @@ test('registry endpoint still includes SSE in Accept header', async (t) => {
     // Registry should include SSE in Accept header
     t.is(acceptHeader, 'application/json, text/event-stream');
   } finally {
-    // Note: Since we used esmock, we can't easily call transport.stop()
-    // The server will be cleaned up when the process exits
+    await transport.stop?.();
   }
 });

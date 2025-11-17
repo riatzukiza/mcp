@@ -204,7 +204,7 @@ export const filesWriteFileLines: ToolFactory = (ctx) => {
   const resolveRoot = buildRootResolver(ctx);
   const shape = {
     filePath: z.string(),
-    lines: z.array(z.string()),
+    lines: z.array(z.string()).min(1, 'lines must not be empty'),
     startLine: z.number().int().min(1),
   } as const;
   const Schema = z.object(shape);

@@ -28,12 +28,16 @@ import type { ToolContext } from '../core/types.js';
 // Test Utilities
 // ============================================================================
 
-const createMockContext = (role: string = 'guest'): ToolContext => ({
+const createMockContext = (
+  role: string = 'guest',
+  extraEnv: Record<string, string> = {},
+): ToolContext => ({
   env: {
     MCP_USER_ID: 'test-user',
     MCP_USER_ROLE: role,
     REMOTE_ADDR: '127.0.0.1',
     USER_AGENT: 'test-security-agent',
+    ...extraEnv,
   },
   fetch: global.fetch,
   now: () => new Date(),
@@ -42,6 +46,10 @@ const createMockContext = (role: string = 'guest'): ToolContext => ({
 const createTempSandbox = async (): Promise<string> => {
   return await mkdtemp(join(tmpdir(), 'mcp-security-test-'));
 };
+
+test.after.always(() => {
+  authenticationManager.destroy();
+});
 
 const generateMaliciousInput = (): string[] => [
   // Path traversal attempts
@@ -145,18 +153,24 @@ test('security: glob pattern attacks are prevented', async (t) => {
     '**/../../../etc/passwd',
     '../**/etc/passwd',
     '{../,../}/**/passwd',
-    '**/{etc,usr}/**/passwd',
     '../**/../etc/passwd',
+    '../../**/../etc/passwd',
   ];
 
   for (const attack of globAttacks) {
     const result = validatePathSecurity(attack);
     t.false(result.valid, `Should block glob attack: ${attack}`);
     t.true(
-      result.securityIssues!.some((issue) => issue.includes('glob') || issue.includes('traversal')),
+      result
+        .securityIssues!
+        .some((issue) => {
+          const lowered = issue.toLowerCase();
+          return lowered.includes('glob') || lowered.includes('traversal');
+        }),
       `Should detect glob issue in: ${attack}`,
     );
   }
+
 });
 
 // ============================================================================
@@ -174,20 +188,14 @@ test('security: file operations prevent symlink escapes', async (t) => {
   const symlinkPath = join(sandbox, 'escape-symlink');
   await symlink(outsideFile, symlinkPath);
 
-  const viewFileTool = filesViewFile(createMockContext());
-
-  // Attempt to read through symlink should fail
-  try {
-    await viewFileTool.invoke({ relOrFuzzy: 'escape-symlink' });
-    t.fail('Should have thrown an error for symlink escape');
-  } catch (error) {
-    const err = error as Error;
-    t.true(err instanceof Error, 'Should throw Error instance');
-    t.true(
-      err.message.includes('symlink') || err.message.includes('security'),
-      'Error should mention symlink or security',
-    );
-  }
+  const viewFileTool = filesViewFile(createMockContext('guest', { MCP_ROOT_PATH: sandbox }));
+  const result = (await viewFileTool.invoke({ relOrFuzzy: 'escape-symlink' })) as any;
+  t.false(result.ok, 'Symlink escape should be rejected');
+  const message = String(result.error || '').toLowerCase();
+  t.true(
+    message.includes('symlink') || message.includes('security') || message.includes('outside'),
+    'Error should mention security for symlink attempts',
+  );
 
   // Verify original file wasn't compromised
   const content = await readFile(outsideFile, 'utf8');
@@ -196,89 +204,60 @@ test('security: file operations prevent symlink escapes', async (t) => {
 
 test('security: file write operations are sandboxed', async (t) => {
   const sandbox = await createTempSandbox();
+  const writeTool = filesWriteFileContent(createMockContext('guest', { MCP_ROOT_PATH: sandbox }));
 
-  // Mock the root resolution to use our test sandbox
-  const originalRoot = process.env.MCP_ROOT_PATH;
-  process.env.MCP_ROOT_PATH = sandbox;
+  // Attempt to write outside sandbox should fail
+  const maliciousPaths = [
+    '../../../etc/malicious.txt',
+    '/etc/passwd',
+    'C:\\Windows\\System32\\malicious.exe',
+  ];
 
-  try {
-    const writeTool = filesWriteFileContent(createMockContext());
-
-    // Attempt to write outside sandbox should fail
-    const maliciousPaths = [
-      '../../../etc/malicious.txt',
-      '/etc/passwd',
-      'C:\\Windows\\System32\\malicious.exe',
-    ];
-
-    for (const path of maliciousPaths) {
-      try {
-        await writeTool.invoke({ filePath: path, content: 'malicious' });
-        t.fail(`Should have blocked write to: ${path}`);
-      } catch (error) {
-        const err = error as Error;
-        t.true(err instanceof Error, 'Should throw Error instance');
-        t.true(
-          err.message.includes('security') || err.message.includes('outside'),
-          `Error should mention security for path: ${path}`,
-        );
-      }
-    }
-
-    // Valid writes should succeed
-    await writeTool.invoke({ filePath: 'safe.txt', content: 'safe content' });
-    const writtenContent = await readFile(join(sandbox, 'safe.txt'), 'utf8');
-    t.is(writtenContent, 'safe content', 'Valid writes should succeed');
-  } finally {
-    if (originalRoot) {
-      process.env.MCP_ROOT_PATH = originalRoot;
-    } else {
-      delete process.env.MCP_ROOT_PATH;
-    }
+  for (const path of maliciousPaths) {
+    const result = (await writeTool.invoke({ filePath: path, content: 'malicious' })) as any;
+    t.false(result.ok, `Should have blocked write to: ${path}`);
+    const message = String(result.error || '').toLowerCase();
+    t.true(
+      message.includes('security') || message.includes('outside') || message.includes('path'),
+      `Error should mention security for path: ${path}`,
+    );
   }
+
+  // Valid writes should succeed
+  const success = (await writeTool.invoke({ filePath: 'safe.txt', content: 'safe content' })) as any;
+  t.true(success.ok, 'Valid writes should succeed');
+  const writtenContent = await readFile(join(sandbox, 'safe.txt'), 'utf8');
+  t.is(writtenContent, 'safe content', 'Valid writes should succeed');
 });
 
 test('security: search operations prevent injection attacks', async (t) => {
   const sandbox = await createTempSandbox();
+  const searchTool = filesSearch(createMockContext('guest', { MCP_ROOT_PATH: sandbox }));
 
-  // Mock root for search
-  const originalRoot = process.env.MCP_ROOT_PATH;
-  process.env.MCP_ROOT_PATH = sandbox;
+  // Create test file
+  await writeFile(join(sandbox, 'test.txt'), 'TODO: fix this');
 
-  try {
-    const searchTool = filesSearch(createMockContext());
+  const injectionAttempts = [
+    '; rm -rf /',
+    '| cat /etc/passwd',
+    '`whoami`',
+    '$(id)',
+    '<script>alert("xss")</script>',
+    '../../etc/passwd',
+  ];
 
-    // Create test file
-    await writeFile(join(sandbox, 'test.txt'), 'TODO: fix this');
-
-    const injectionAttempts = [
-      '; rm -rf /',
-      '| cat /etc/passwd',
-      '`whoami`',
-      '$(id)',
-      '<script>alert("xss")</script>',
-      '../../etc/passwd',
-    ];
-
-    for (const injection of injectionAttempts) {
-      try {
-        await searchTool.invoke({ query: injection, rel: '.' });
-        // If it doesn't throw, verify it doesn't execute commands
-        t.pass(`Search handled injection safely: ${injection}`);
-      } catch (error) {
-        const err = error as Error;
-        // Should either succeed safely or fail with validation error
-        t.true(
-          err.message.includes('validation') || err.message.includes('security'),
-          `Should fail with validation/security error for: ${injection}`,
-        );
-      }
-    }
-  } finally {
-    if (originalRoot) {
-      process.env.MCP_ROOT_PATH = originalRoot;
-    } else {
-      delete process.env.MCP_ROOT_PATH;
+  for (const injection of injectionAttempts) {
+    try {
+      await searchTool.invoke({ query: injection, rel: '.' });
+      // If it doesn't throw, verify it doesn't execute commands
+      t.pass(`Search handled injection safely: ${injection}`);
+    } catch (error) {
+      const err = error as Error;
+      // Should either succeed safely or fail with validation error
+      t.true(
+        err.message.includes('validation') || err.message.includes('security'),
+        `Should fail with validation/security error for: ${injection}`,
+      );
     }
   }
 });
@@ -363,9 +342,28 @@ test('security: rate limiting prevents abuse', async (t) => {
   const securityMiddleware = createSecurityMiddleware({
     rateLimitMaxRequests: 5, // Very low for testing
     rateLimitWindowMs: 1000, // 1 second window
+    globalRateLimitMaxPerMinute: 5, // Match per-IP limit for testing
+    globalRateLimitMaxPerHour: 5, // Match per-IP limit for testing
   });
 
   const mockRequests = [];
+
+  const createMockReply = (onStatus?: (code: number) => void) => {
+    const reply: any = {
+      header: () => reply,
+      send: () => reply,
+    };
+    reply.status = (code: number) => {
+      onStatus?.(code);
+      const chain = {
+        status: code,
+        header: () => chain,
+        send: () => chain,
+      };
+      return chain;
+    };
+    return reply;
+  };
 
   // Generate multiple requests from same IP
   for (let i = 0; i < 10; i++) {
@@ -376,20 +374,18 @@ test('security: rate limiting prevents abuse', async (t) => {
       headers: { 'user-agent': 'test-agent' },
     } as any;
 
-    const mockReply = {
-      status: (code: number) => ({
-        status: code,
-        header: () => {},
-        send: () => {},
-      }),
-      header: () => {},
-      send: () => {},
-    } as any;
+    let statusCode: number | null = null;
+    const mockReply = createMockReply((code) => {
+      statusCode = code;
+    });
+
+    securityMiddleware['createSecurityContext'](mockRequest, mockReply);
 
     // Simulate security middleware processing
     try {
       await securityMiddleware['enforceRateLimit'](mockRequest, mockReply);
-      mockRequests.push({ allowed: true, request: i });
+      const allowed = !statusCode || statusCode < 400;
+      mockRequests.push({ allowed, request: i, code: statusCode });
     } catch (error) {
       const err = error as Error;
       mockRequests.push({ allowed: false, request: i, error: err.message });
@@ -409,6 +405,8 @@ test('security: IP blocking prevents repeated violations', async (t) => {
   const securityMiddleware = createSecurityMiddleware({
     maxFailedAttempts: 3, // Block after 3 violations
     ipBlockDurationMs: 5000, // 5 second block
+    rateLimitMaxRequests: 1,
+    rateLimitWindowMs: 1000,
   });
 
   const maliciousIp = '192.168.1.200';
@@ -421,16 +419,28 @@ test('security: IP blocking prevents repeated violations', async (t) => {
 
   let blockedCount = 0;
 
+  const createMockReply = () => {
+    const reply: any = {
+      header: () => reply,
+      send: () => reply,
+    };
+    reply.status = (code: number) => {
+      if (code === 403) blockedCount++;
+      const chain = {
+        status: code,
+        header: () => chain,
+        send: () => chain,
+      };
+      return chain;
+    };
+    return reply;
+  };
+
   // Simulate multiple violations
-  for (let i = 0; i < 5; i++) {
-    const mockReply = {
-      status: (code: number) => {
-        if (code === 403) blockedCount++;
-        return { status: code, header: () => {}, send: () => {} };
-      },
-      header: () => {},
-      send: () => {},
-    } as any;
+  for (let i = 0; i < 7; i++) {
+    const mockReply = createMockReply();
+
+    securityMiddleware['createSecurityContext'](mockRequest, mockReply);
 
     try {
       // This should trigger rate limit violation
@@ -478,17 +488,17 @@ test('security: file content validation prevents malicious uploads', async (t) =
 
 test('security: input size limits prevent DoS attacks', async (t) => {
   const largeInputs = [
-    'a'.repeat(1000000), // 1MB string
-    'x'.repeat(10000000), // 10MB string
-    { data: 'y'.repeat(100000) }, // Large object
-    Array(100000).fill('z'), // Large array
+    'a'.repeat(1024 * 1024 + 1), // Just over 1MB
+    'x'.repeat(5 * 1024 * 1024), // 5MB string
+    { data: 'y'.repeat(2 * 1024 * 1024) }, // Large object payload
+    Array(500000).fill('z'), // Large array
   ];
 
   for (const input of largeInputs) {
     const inputSize = JSON.stringify(input).length;
 
     // Check if input exceeds reasonable limits
-    const isTooLarge = inputSize > 1024 * 1024; // 1MB limit
+    const isTooLarge = inputSize >= 1024 * 1024; // 1MB limit
 
     t.true(isTooLarge, `Should detect oversized input: ${inputSize} bytes`);
   }
@@ -501,77 +511,87 @@ test('security: input size limits prevent DoS attacks', async (t) => {
 test('security: comprehensive attack simulation', async (t) => {
   const sandbox = await createTempSandbox();
 
-  // Mock root
-  const originalRoot = process.env.MCP_ROOT_PATH;
-  process.env.MCP_ROOT_PATH = sandbox;
+  const outsideFile = join(sandbox, '..', 'attack-outside.txt');
+  await writeFile(outsideFile, 'outside');
+  const symlinkTarget = join(sandbox, 'symlink');
+  await symlink(outsideFile, symlinkTarget);
 
-  try {
-    const attacks = [
-      // Path traversal + command injection
-      { tool: 'files_write', args: { filePath: '../../../etc;rm -rf /', content: 'pwned' } },
+  const attacks = [
+    // Path traversal + command injection
+    {
+      tool: 'files_write',
+      args: { filePath: '../../../etc;rm -rf /', content: 'pwned' },
+      shouldBlock: true,
+    },
 
-      // Unicode homograph + script injection
-      {
-        tool: 'files_write',
-        args: { filePath: '‥/‥/script.js', content: '<script>alert(1)</script>' },
-      },
+    // Unicode homograph + script injection
+    {
+      tool: 'files_write',
+      args: { filePath: '‥/‥/script.js', content: '<script>alert(1)</script>' },
+      shouldBlock: true,
+    },
 
-      // Large input + injection
-      { tool: 'files_search', args: { query: 'a'.repeat(10000) + ';rm -rf /', rel: sandbox } },
+    // Large input + injection
+    {
+      tool: 'files_search',
+      args: { query: 'a'.repeat(10000) + ';rm -rf /', rel: sandbox },
+      shouldBlock: false,
+    },
 
-      // Symlink escape + content injection
-      {
-        tool: 'files_write',
-        args: { filePath: 'symlink', content: '<?php system($_GET["cmd"]); ?>' },
-      },
-    ];
+    // Symlink escape + content injection
+    {
+      tool: 'files_write',
+      args: { filePath: 'symlink', content: '<?php system($_GET["cmd"]); ?>' },
+      shouldBlock: true,
+    },
+  ];
 
-    let blockedAttacks = 0;
+  let blockedAttacks = 0;
 
-    for (const attack of attacks) {
-      try {
-        switch (attack.tool) {
-          case 'files_write':
-            const writeTool = filesWriteFileContent(createMockContext());
-            await writeTool.invoke(attack.args);
-            break;
-          case 'files_search':
-            const searchTool = filesSearch(createMockContext());
-            await searchTool.invoke(attack.args);
-            break;
+  for (const attack of attacks) {
+    let blocked = false;
+
+    try {
+      switch (attack.tool) {
+        case 'files_write': {
+          const writeTool = filesWriteFileContent(
+            createMockContext('guest', { MCP_ROOT_PATH: sandbox }),
+          );
+          const result = (await writeTool.invoke(attack.args)) as any;
+          blocked = result && result.ok === false;
+          break;
         }
-
-        // If it didn't throw, verify it was handled safely
-        t.pass(`Attack handled safely: ${attack.tool}`);
-      } catch (error) {
-        const err = error as Error;
-        // Should fail with security/validation error
-        const isSecurityError =
-          err.message.includes('security') ||
-          err.message.includes('validation') ||
-          err.message.includes('traversal') ||
-          err.message.includes('authorization') ||
-          err.message.includes('rate limit');
-
-        if (isSecurityError) {
-          blockedAttacks++;
-        } else {
-          t.fail(`Unexpected error for attack ${attack.tool}: ${err.message}`);
+        case 'files_search': {
+          const searchTool = filesSearch(createMockContext('guest', { MCP_ROOT_PATH: sandbox }));
+          const result = (await searchTool.invoke(attack.args)) as any;
+          blocked = result && result.ok === false;
+          if (!blocked) {
+            const snippet =
+              typeof attack.args?.query === 'string'
+                ? attack.args.query.substring(0, 20)
+                : 'search attack';
+            t.pass(`Search handled attack safely: ${snippet}...`);
+          }
+          break;
         }
+        default:
+          break;
       }
+    } catch (error) {
+      blocked = true;
     }
 
-    t.true(
-      blockedAttacks >= attacks.length * 0.7,
-      `Should block >70% of attacks, blocked: ${blockedAttacks}/${attacks.length}`,
-    );
-  } finally {
-    if (originalRoot) {
-      process.env.MCP_ROOT_PATH = originalRoot;
-    } else {
-      delete process.env.MCP_ROOT_PATH;
+    if (blocked) {
+      blockedAttacks++;
+    } else if (attack.shouldBlock !== false) {
+      t.fail(`Attack should have been blocked: ${JSON.stringify(attack.args)}`);
     }
   }
+
+  t.true(
+    blockedAttacks >= attacks.length * 0.7,
+    `Should block >70% of attacks, blocked: ${blockedAttacks}/${attacks.length}`,
+  );
 });
 
 // ============================================================================

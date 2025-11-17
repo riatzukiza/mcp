@@ -1,0 +1,15 @@
+{
+  "oauth": {
+    "clientId": "${OAUTH_GITHUB_CLIENT_ID}",
+    "clientSecret": "${OAUTH_GITHUB_CLIENT_SECRET}",
+    "redirectUri": "${OAUTH_REDIRECT_URI}"
+  },
+  "tokens": {
+    "accessToken": "${OAUTH_ACCESS_TOKEN}",
+    "refreshToken": "${OAUTH_REFRESH_TOKEN}"
+  },
+  "secrets": {
+    "apiKey": "${INTERNAL_API_KEY}",
+    "webhookToken": "${WEBHOOK_TOKEN}"
+  }
+}

@@ -26,6 +26,7 @@ export type OAuthSystemConfig = Readonly<{
     };
   };
   readonly redirectUri: string;
+  readonly redirectAllowlist?: readonly string[];
   readonly stateTimeout: number;
   readonly sessionTimeout: number;
   readonly tokenRefreshThreshold: number;

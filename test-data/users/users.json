@@ -1,9 +1,9 @@
 [
   {
-    "id": "22eac1af-f26a-4496-bb48-b9f00cf58924",
+    "id": "81d8e3e7-686a-4f82-85ce-33e24aa72459",
     "username": "testuser",
     "email": "test@example.com",
-    "name": "Test User",
+    "name": "Updated Test User",
     "role": "user",
     "status": "active",
     "authMethod": "oauth",
@@ -11,8 +11,8 @@
     "providerUserId": "12345",
     "permissions": [],
     "customRoles": [],
-    "createdAt": "2025-11-13T05:11:59.410Z",
-    "updatedAt": "2025-11-13T05:11:59.410Z",
+    "createdAt": "2025-11-17T06:18:31.070Z",
+    "updatedAt": "2025-11-17T06:18:31.077Z",
     "metadata": {}
   }
 ]

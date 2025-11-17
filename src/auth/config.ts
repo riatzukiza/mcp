@@ -34,13 +34,21 @@ export type OAuthConfig = Readonly<{
  * Load OAuth configuration from environment variables
  */
 export function loadOAuthConfig(): OAuthConfig {
+  const redirectUri = getRequiredEnv('OAUTH_REDIRECT_URI', 'http://localhost:3210/auth/oauth/callback');
+  const redirectAllowlistEnv = getEnv('OAUTH_REDIRECT_ALLOWLIST');
+  const parsedRedirectAllowlist = redirectAllowlistEnv
+    ? redirectAllowlistEnv.split(',').map((uri) => uri.trim()).filter((uri) => uri.length > 0)
+    : [];
+  const redirectAllowlist = Array.from(new Set([redirectUri, ...parsedRedirectAllowlist]));
+
   // OAuth System Configuration
   const oauthConfig: OAuthSystemConfig = {
     providers: {
       github: loadGitHubProviderConfig(),
       google: loadGoogleProviderConfig(),
     },
-    redirectUri: getRequiredEnv('OAUTH_REDIRECT_URI', 'http://localhost:3210/auth/oauth/callback'),
+    redirectUri,
+    redirectAllowlist,
     stateTimeout: parseInt(getEnv('OAUTH_STATE_TIMEOUT', '600'), 10), // 10 minutes
     sessionTimeout: parseInt(getEnv('OAUTH_SESSION_TIMEOUT', '86400'), 10), // 24 hours
     tokenRefreshThreshold: parseInt(getEnv('OAUTH_TOKEN_REFRESH_THRESHOLD', '300'), 10), // 5 minutes

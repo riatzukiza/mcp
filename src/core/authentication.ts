@@ -134,6 +134,8 @@ export class AuthenticationManager {
   private readonly apiKeyConfig: ApiKeyConfig;
   private readonly rateLimiters = new Map<string, RateLimiter>();
 
+  private cleanupHandle?: NodeJS.Timeout;
+
   constructor(jwtConfig: Partial<JwtConfig> = {}, apiKeyConfig: Partial<ApiKeyConfig> = {}) {
     this.jwtConfig = {
       secret: jwtConfig.secret || process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex'),
@@ -154,14 +156,11 @@ export class AuthenticationManager {
     this.initializeEnvironmentApiKeys();
 
     // Cleanup rate limiters periodically
-    setInterval(
-      () => {
-        for (const limiter of this.rateLimiters.values()) {
-          limiter.cleanup();
-        }
-      },
-      5 * 60 * 1000,
-    ); // Every 5 minutes
+    this.cleanupHandle = setInterval(() => {
+      for (const limiter of this.rateLimiters.values()) {
+        limiter.cleanup();
+      }
+    }, 5 * 60 * 1000); // Every 5 minutes
   }
 
   private initializeEnvironmentApiKeys(): void {
@@ -331,7 +330,7 @@ export class AuthenticationManager {
     }
 
     // Try query parameter
-    const query = request.query as Record<string, unknown>;
+    const query = (request.query ?? {}) as Record<string, unknown>;
     const queryKey = query[this.apiKeyConfig.queryParam] as string;
     if (queryKey && typeof queryKey === 'string') {
       return queryKey;
@@ -462,6 +461,13 @@ export class AuthenticationManager {
         method: authResult.method,
       };
     };
+  }
+
+  destroy(): void {
+    if (this.cleanupHandle) {
+      clearInterval(this.cleanupHandle);
+      this.cleanupHandle = undefined;
+    }
   }
 }
 
