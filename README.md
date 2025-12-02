@@ -6,7 +6,7 @@ Single MCP server module with composable, pure tools. ESM-only, Fastify HTTP tra
 
 ### Configuration Loading
 
-The MCP system uses a sophisticated configuration loader that supports multiple sources and provides robust validation. For complete documentation on configuration options, schema validation, and security features, see [[mcp-config-loader.md]].
+The MCP system uses a sophisticated configuration loader that supports multiple sources and provides robust validation. For complete documentation on configuration options, schema validation, and security features, see [[mcp-config-loader]].
 
 ### Unified configuration
 
@@ -287,7 +287,7 @@ All GitHub review tools require `GITHUB_TOKEN` (and optional
 ## Documentation
 
 - **[[authorization.md]]** - Complete RBAC security framework documentation
-- **[[mcp-config-loader.md]]** - Configuration loading, validation, and security features
+- **[[mcp-config-loader]]** - Configuration loading, validation, and security features
 - **[[docs/authorization.md]]** - Security implementation details and best practices
 
 <!-- READMEFLOW:BEGIN -->
