@@ -394,55 +394,6 @@ test('MCP /github endpoint integration test', async (t) => {
   }
 });
 
-test('MCP /discord endpoint integration test', async (t) => {
-  const port = await allocatePort();
-
-  // Create test tools for /discord endpoint
-  const discordTools = [
-    createTestTool('discord_send_message', {
-      channelId: z.string(),
-      content: z.string(),
-    }),
-    createTestTool('discord_list_messages', {
-      channelId: z.string(),
-      limit: z.number().optional(),
-    }),
-  ];
-
-  const server = createMcpServer(discordTools);
-  const transport = fastifyTransport({ host: '127.0.0.1', port });
-
-  await transport.start([{ path: '/discord', kind: 'registry', handler: server }]);
-
-  try {
-    // Initialize MCP session
-    const initResult = await makeMcpRequest(`http://127.0.0.1:${port}/discord`, 'initialize', {
-      protocolVersion: '2024-10-01',
-      clientInfo: { name: 'test-client', version: '1.0.0' },
-      capabilities: {},
-    });
-
-    const sessionId = (initResult as any).sessionId;
-
-    // List tools
-    const listResult = await makeMcpRequest(`http://127.0.0.1:${port}/discord`, 'tools/list', {}, sessionId);
-    t.true(Array.isArray(listResult.result.tools));
-    t.is(listResult.result.tools.length, 2);
-
-    // Test discord_send_message tool
-    const callResult = await makeMcpRequest(`http://127.0.0.1:${port}/discord`, 'tools/call', {
-      name: 'discord_send_message',
-      arguments: { channelId: 'test-channel', content: 'Hello from integration test' },
-    }, sessionId);
-
-    t.true(Array.isArray(callResult.result.content));
-    t.is(callResult.result.content[0].type, 'text');
-
-  } finally {
-    await transport.stop?.();
-  }
-});
-
 test('MCP /github/review endpoint integration test', async (t) => {
   const port = await allocatePort();
 

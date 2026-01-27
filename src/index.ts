@@ -112,7 +112,6 @@ import {
   resolveStdioTools,
   type EndpointDefinition,
 } from './core/resolve-config.js';
-import { discordSendMessage, discordListMessages } from './tools/discord.js';
 import { loadStdioServerSpecs, type StdioServerSpec } from './proxy/config.js';
 import { createProxy, type ProxyInstance } from './proxy/proxy-factory.js';
 import { sandboxCreateTool, sandboxDeleteTool, sandboxListTool } from './tools/sandboxes.js';
@@ -226,8 +225,6 @@ const toolCatalog = new Map<string, ToolFactory>([
   // ['kanban_get_board_schema', kanbanGetBoardSchema],
   // ['kanban_realtime_sync', kanbanRealtimeSync],
   // ['kanban_broadcast_event', kanbanBroadcastEvent],
-  ['discord_send_message', discordSendMessage],
-  ['discord_list_messages', discordListMessages],
   ['sandbox_create', sandboxCreateTool],
   ['sandbox_list', sandboxListTool],
   ['sandbox_delete', sandboxDeleteTool],
